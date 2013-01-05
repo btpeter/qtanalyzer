@@ -31,11 +31,26 @@ namespace QueryTermWeightAnalyzer
         {
             Dictionary<string, int> dict = new Dictionary<string, int>();
             StreamReader sr = new StreamReader(strFileName);
+            int LineCnt = 0;
+            HashSet<string> setWrongTerm = new HashSet<string>();
             while (sr.EndOfStream == false)
             {
                 string strLine = sr.ReadLine();
                 string[] items = strLine.Split('\t');
-                dict.Add(items[0], int.Parse(items[1]));
+                LineCnt++;
+
+                if (setWrongTerm.Contains(items[0]) == false)
+                {
+                    try
+                    {
+                        dict.Add(items[0], int.Parse(items[1]));
+                    }
+                    catch (System.Exception err)
+                    {
+                        dict.Remove(items[0]);
+                        setWrongTerm.Add(items[0]);
+                    }
+                }
             }
             sr.Close();
 
@@ -128,7 +143,7 @@ namespace QueryTermWeightAnalyzer
             return (double)(bigramFreq) / (double)(unigramFreq);
         }
 
-        public string GetTermWeight(List<string> strTagList)
+        public string GetTermRankTag(List<string> strTagList)
         {
             foreach (string item in strTagList)
             {
@@ -140,7 +155,60 @@ namespace QueryTermWeightAnalyzer
             return null;
         }
 
-        public List<Token> Analyze(string strText)
+        public string GetTermOrderTag(List<string> strTagList)
+        {
+            foreach (string item in strTagList)
+            {
+                if (item == ">" || item == "=" || item == "<" || item == "E")
+                {
+                    return item;
+                }
+            }
+            return null;
+        }
+
+        public void ConvertOrderToRank(List<Token> tokenList)
+        {
+            int maxRank = -10;
+            int minRank = 10;
+            int currRank = 0;
+            foreach (Token token in tokenList)
+            {
+                if (token.strTag == ">")
+                {
+                    currRank--;
+                    if (currRank > maxRank)
+                    {
+                        maxRank = currRank;
+                    }
+                }
+                else if (token.strTag == "<")
+                {
+                    currRank++;
+                    if (currRank < minRank)
+                    {
+                        minRank = currRank;
+                    }
+                }
+            }
+
+            currRank = 0;
+            foreach (Token token in tokenList)
+            {
+                token.strTag = "RANK_" + Math.Abs(currRank - maxRank).ToString();
+                if (token.strTag == ">")
+                {
+                    currRank--;
+                }
+                else if (token.strTag == "<")
+                {
+                    currRank++;
+                }
+            }
+        }
+
+
+        public List<Token> LabelString(string strText)
         {
             List<Token> tknList = new List<Token>();
             wordseg.Segment(strText, wbTokens, bUseCRFModel);
@@ -150,48 +218,61 @@ namespace QueryTermWeightAnalyzer
                 tkn.offset = wbTokens.tokenList[i].offset;
                 tkn.length = wbTokens.tokenList[i].len;
                 tkn.strTerm = wbTokens.tokenList[i].strTerm;
+                tkn.strTag = GetTermOrderTag(wbTokens.tokenList[i].strTagList);
 
-                string strTermWeight = GetTermWeight(wbTokens.tokenList[i].strTagList);
-                if (strTermWeight != null)
-                {
-                    tkn.strTag = strTermWeight;
-                }
-                else
-                {
-                    tkn.strTag = "NOR";
-                }
+                tknList.Add(tkn);
+            }
+            return tknList;
+        }
 
+
+        public List<Token> Analyze(string strText)
+        {
+            List<Token> tknList = LabelString(strText);
+            for (int i = 0; i < tknList.Count; i++)
+            {
                 double probLeftTerm = 0.0, probRightTerm = 0.0;
                 string strLeftTermWeight = "", strRightTermWeight = "";
 
                 if (i > 0)
                 {
-                    probLeftTerm = LMProb(wbTokens.tokenList[i].strTerm, wbTokens.tokenList[i - 1].strTerm);
-                    strLeftTermWeight = GetTermWeight(wbTokens.tokenList[i - 1].strTagList);
+                    probLeftTerm = LMProb(tknList[i].strTerm, tknList[i - 1].strTerm);
+                    strLeftTermWeight = tknList[i - 1].strTag;
                 }
 
-                if (i < wbTokens.tokenList.Count - 1)
+                if (i < tknList.Count - 1)
                 {
-                    probRightTerm = LMProb(wbTokens.tokenList[i].strTerm, wbTokens.tokenList[i + 1].strTerm);
-                    strRightTermWeight = GetTermWeight(wbTokens.tokenList[i + 1].strTagList);
+                    probRightTerm = LMProb(tknList[i].strTerm, tknList[i + 1].strTerm);
+                    strRightTermWeight = tknList[i + 1].strTag;
                 }
 
                 if (probLeftTerm > probRightTerm)
                 {
                     if (probLeftTerm > 0.8)
                     {
-                        tkn.strTag = tkn.strTag + "|" + strLeftTermWeight;
+                        tknList[i].strTag = tknList[i].strTag + "|" + strLeftTermWeight;
                     }
                 }
                 else
                 {
                     if (probRightTerm > 0.8)
                     {
-                        tkn.strTag = tkn.strTag + "|" + strRightTermWeight;
+                        tknList[i].strTag = tknList[i].strTag + "|" + strRightTermWeight;
                     }
                 }
 
-                tknList.Add(tkn);
+                if (tknList[i].strTag.Contains("RANK_0") == true)
+                {
+                    tknList[i].strTag = "RANK_0";
+                }
+                else if (tknList[i].strTag.Contains("RANK_1") == true)
+                {
+                    tknList[i].strTag = "RANK_1";
+                }
+                else
+                {
+                    tknList[i].strTag = "RANK_2";
+                }
             }
 
             return tknList;

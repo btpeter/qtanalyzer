@@ -7,110 +7,270 @@ using WordSeg;
 
 namespace StatTermWeightInQuery
 {
+    class Token
+    {
+        public string strTerm;
+        public bool bDuplicate;
+        public string strHash;
+        public double fWeight;
+
+        public Token()
+        {
+            bDuplicate = false;
+        }
+
+    }
+
     class QueryItem
     {
+        //public int clusterFreq;
         public int freq;
         public string strQuery;
-        public Dictionary<string, double> token2weight;
+        public List<Token> tokenList;
+
+        public QueryItem()
+        {
+            tokenList = null;
+        }
     }
 
     class Program
     {
         public static SortedDictionary<int, List<string>> freq2TermWeightList = new SortedDictionary<int, List<string>>();
-        public const int MIN_QUERY_NUM_FOR_EACH_URL = 2;
         public static int MIN_QUERY_URL_PAIR_FREQUENCY = 2;
+        public static int MIN_CLUSTER_FREQUENCY = 4;
         public static Dictionary<string, List<QueryItem>> query2Item;
         private static StreamWriter sw;
-        public static Dictionary<string, List<string>> synonymDict;
+        private static StreamWriter sw_dup;
         public static Tokens tokens;
         public static WordSeg.WordSeg wordseg;
 
-        //Check whether aList is sub set of bList.
-        private static bool AsubOfB(List<string> aList, List<string> bList, ref List<string> rstTokenList)
+
+        private static string ShowTokenList(List<Token> tokenList)
         {
-            rstTokenList.Clear();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0;i < tokenList.Count;i++)
+            {
+                sb.Append(tokenList[i].strTerm);
+            }
+
+            return sb.ToString();
+        }
+
+        //Check whether aList is sub set of bList.
+        private static bool AsubOfB(List<Token> aList, List<Token> bList, List<Token> joinBList)
+        {
+            string[] sep;
+            sep = new string[1];
+            sep[0] = "$_M_$";
+
+            joinBList.Clear();
             for (int i = 0; i < aList.Count; i++)
             {
-                if (!bList.Contains(aList[i]))
+                bool bMatched = false;
+                int j = 0;
+                int MaxSim = 0;
+                Token bestToken = null;
+                Dictionary<int, int> maxSim2Cnt = new Dictionary<int, int>();
+
+                for (j = 0; j < bList.Count; j++)
                 {
-                    //Check synonym terms
-                    List<string> synonymPair = GetSynonymPair(aList[i]);
-                    bool flag = false;
-                    if (synonymPair != null)
+                    if (aList[i].strTerm == bList[j].strTerm)
                     {
-                        foreach (string str in synonymPair)
+                        if (aList[i].bDuplicate == false && bList[j].bDuplicate == false)
                         {
-                            if (bList.Contains(str))
+                            MaxSim = 10;
+                            bestToken = bList[j];
+                            bMatched = true;
+                            break;
+                        }
+                        else
+                        {
+                            string[] arrHashA = aList[i].strHash.Split(sep,100, StringSplitOptions.None);
+                            string[] arrHashB = bList[j].strHash.Split(sep, 100, StringSplitOptions.None);
+
+                            int sim = 0;
+                            if (arrHashA[0] == arrHashB[0])
                             {
-                                rstTokenList.Add(str);
-                                flag = true;
-                                break;
+                                if (arrHashA[0].Contains("$B$") == true || arrHashA[0].Contains("$E$") == true)
+                                {
+                                    sim++;
+                                }
+                                else
+                                {
+                                    sim += 2;
+                                }
                             }
+                            if (arrHashA[1] == arrHashB[1])
+                            {
+                                if (arrHashA[1].Contains("$B$") == true || arrHashA[1].Contains("$E$") == true)
+                                {
+                                    sim++;
+                                }
+                                else
+                                {
+                                    sim += 2;
+                                }
+                            }
+                            if (sim > MaxSim)
+                            {
+                                bestToken = bList[j];
+                                MaxSim = sim;
+                                bMatched = true;
+                            }
+
+                            if (maxSim2Cnt.ContainsKey(sim) == false)
+                            {
+                                maxSim2Cnt.Add(sim, 0);
+                            }
+                            maxSim2Cnt[sim]++;
                         }
                     }
-                    if (flag)
+                }
+
+                foreach (KeyValuePair<int, int> pair in maxSim2Cnt)
+                {
+                    if (pair.Value > 1)
                     {
-                        continue;
+                        return false;
                     }
+                }
+
+                if (bMatched == true)
+                {
+                    joinBList.Add(bestToken);
+                }
+                else
+                {
                     return false;
                 }
-                rstTokenList.Add(aList[i]);
             }
             return true;
         }
 
 
-        public static List<string> GetSynonymPair(string str)
+        private static bool AsubOfB_2(List<Token> aList, List<Token> bList, List<Token> joinBList)
         {
-            if (synonymDict.ContainsKey(str))
-            {
-                return synonymDict[str];
-            }
-            return null;
-        }
+            string[] sep;
+            sep = new string[1];
+            sep[0] = "$_M_$";
 
-        private static void LoadSynonymPairs(string strSynonymDict)
-        {
-            synonymDict = new Dictionary<string, List<string>>();
-            StreamReader reader = new StreamReader(strSynonymDict);
-            while (!reader.EndOfStream)
+            joinBList.Clear();
+            for (int i = 0; i < aList.Count; i++)
             {
-                string[] strArray = reader.ReadLine().Split(new char[] { '\t' });
-                if ((!strArray[0].Contains(" ") && !strArray[1].Contains(" ")) && (!strArray[0].Contains(strArray[1]) && !strArray[1].Contains(strArray[0])))
+                bool bMatched = false;
+                int j = 0;
+                int MaxSim = 0;
+                Token bestToken = null;
+                Dictionary<int, int> maxSim2Cnt = new Dictionary<int, int>();
+
+                for (j = 0; j < bList.Count; j++)
                 {
-                    if (!synonymDict.ContainsKey(strArray[0]))
+                    if (aList[i].strTerm == bList[j].strTerm)
                     {
-                        synonymDict.Add(strArray[0], new List<string>());
+                        if (aList[i].bDuplicate == false && bList[j].bDuplicate == false)
+                        {
+                            MaxSim = 10;
+                            bestToken = aList[i];
+                            bMatched = true;
+                            break;
+                        }
+                        else
+                        {
+                            string[] arrHashA = aList[i].strHash.Split(sep, 100, StringSplitOptions.None);
+                            string[] arrHashB = bList[j].strHash.Split(sep, 100, StringSplitOptions.None);
+
+                            int sim = 0;
+                            if (arrHashA[0] == arrHashB[0])
+                            {
+                                if (arrHashA[0].Contains("$B$") == true || arrHashA[0].Contains("$E$") == true)
+                                {
+                                    sim++;
+                                }
+                                else
+                                {
+                                    sim += 2;
+                                }
+                            }
+                            if (arrHashA[1] == arrHashB[1])
+                            {
+                                if (arrHashA[1].Contains("$B$") == true || arrHashA[1].Contains("$E$") == true)
+                                {
+                                    sim++;
+                                }
+                                else
+                                {
+                                    sim += 2;
+                                }
+                            }
+                            if (sim > MaxSim)
+                            {
+                                bestToken = aList[i];
+                                MaxSim = sim;
+                                bMatched = true;
+                            }
+
+                            if (maxSim2Cnt.ContainsKey(sim) == false)
+                            {
+                                maxSim2Cnt.Add(sim, 0);
+                            }
+                            maxSim2Cnt[sim]++;
+                        }
                     }
-                    if (!synonymDict.ContainsKey(strArray[1]))
+                }
+
+                foreach (KeyValuePair<int, int> pair in maxSim2Cnt)
+                {
+                    if (pair.Value > 1)
                     {
-                        synonymDict.Add(strArray[1], new List<string>());
+                        return false;
                     }
-                    synonymDict[strArray[0]].Add(strArray[1]);
-                    synonymDict[strArray[1]].Add(strArray[0]);
+                }
+
+                if (bMatched == true)
+                {
+                    joinBList.Add(bestToken);
+                }
+                else
+                {
+                    return false;
                 }
             }
-            reader.Close();
+            return true;
+        }
+
+        public static void AddQueryList(List<QueryItem> qiList)
+        {
+            foreach (QueryItem item in qiList)
+            {
+                if (query2Item.ContainsKey(item.strQuery) == false)
+                {
+                    query2Item.Add(item.strQuery, new List<QueryItem>());
+                }
+                query2Item[item.strQuery].Add(item);
+            }
         }
 
         private static void Main(string[] args)
         {
-            if (args.Length != 3)
+            if (args.Length != 4)
             {
-                Console.WriteLine("StatTermWeightInQuery [Query_Freq_Url Pair FileName] [Query_Term_Weight FileName] [Min Query Url Pair Frequency]");
+                Console.WriteLine("StatTermWeightInQuery [Query_ClusterId_Freq FileName] [Query_Term_Weight FileName] [Min Query_ClusterId Frequency] [Min Cluster Frequency]");
             }
             else
             {
                 MIN_QUERY_URL_PAIR_FREQUENCY = int.Parse(args[2]);
+                MIN_CLUSTER_FREQUENCY = int.Parse(args[3]);
                 Console.WriteLine("Initializing wordbreaker...");
                 wordseg = new WordSeg.WordSeg();
                 wordseg.LoadLexicalDict("ChineseDictionary.txt", true);
                 tokens = wordseg.CreateTokens(0x400);
                 Console.WriteLine("Start to process...");
-                LoadSynonymPairs("SynonymDictionary.txt");
                 query2Item = new Dictionary<string, List<QueryItem>>();
                 StreamReader reader = new StreamReader(args[0]);
                 sw = new StreamWriter(args[1], false, Encoding.UTF8);
+                sw_dup = new StreamWriter(args[1] + ".dup", false, Encoding.UTF8);
+
                 string lastUrl = "";
                 List<QueryItem> qiList = new List<QueryItem>();
                 while (!reader.EndOfStream)
@@ -118,23 +278,18 @@ namespace StatTermWeightInQuery
                     string[] strArray = reader.ReadLine().Split(new char[] { '\t' });
                     QueryItem item = new QueryItem
                     {
-                        strQuery = strArray[0],
+                        strQuery = strArray[0].Replace(" ", ""),
                         freq = int.Parse(strArray[2])
                     };
                     if (item.freq >= MIN_QUERY_URL_PAIR_FREQUENCY)
                     {
-                        item.token2weight = new Dictionary<string, double>();
                         string strUrl = strArray[1];
-                        if (!query2Item.ContainsKey(item.strQuery))
-                        {
-                            query2Item.Add(item.strQuery, new List<QueryItem>());
-                        }
-                        query2Item[item.strQuery].Add(item);
                         if ((lastUrl.Length > 0) && (strUrl != lastUrl))
                         {
                             if (qiList.Count >= 2)
                             {
                                 StatTermWeightInQuery(qiList);
+                                AddQueryList(qiList);
                             }
                             qiList = new List<QueryItem>();
                         }
@@ -145,10 +300,12 @@ namespace StatTermWeightInQuery
                 if (qiList.Count >= 2)
                 {
                     StatTermWeightInQuery(qiList);
+                    AddQueryList(qiList);
                 }
                 MergeQueryWeight();
                 reader.Close();
                 sw.Close();
+                sw_dup.Close();
             }
         }
 
@@ -161,122 +318,257 @@ namespace StatTermWeightInQuery
             {
                 if (pair.Value.Count != 0)
                 {
-                    Dictionary<string, double> term2weight = new Dictionary<string, double>();
+                    if (pair.Value[0].tokenList == null)
+                    {
+                        //This query is invlidated, ignore it.
+                        Console.WriteLine("Invalidated Query Item at index 0");
+                        continue;
+                    }
+
                     int iTotalFreq = 0;
                     foreach (QueryItem item in pair.Value)
                     {
-                        iTotalFreq += item.freq;
-                    }
-                    foreach (QueryItem item2 in pair.Value)
-                    {
-                        double queryInUrlPercent = ((double)item2.freq) / ((double)iTotalFreq);
-                        foreach (KeyValuePair<string, double> pair2 in item2.token2weight)
+                        if (item.tokenList != null)
                         {
-                            if (!term2weight.ContainsKey(pair2.Key))
-                            {
-                                term2weight.Add(pair2.Key, 0.0);
-                            }
-                            term2weight[pair2.Key] = term2weight[pair2.Key] + (queryInUrlPercent * pair2.Value);
-                        }
-                    }
-
-                    if (term2weight.Count > 0)
-                    {
-                        wordseg.Segment(pair.Key, tokens, false);
-                        string strOutput = pair.Key + "\t" + iTotalFreq.ToString() + "\t";
-                        bool bInComplete = false;
-                        foreach (Token token in tokens.tokenList)
-                        {
-                            if (token.strTerm.Length > 0)
-                            {
-                                if (term2weight.ContainsKey(token.strTerm) == false)
-                                {
-                                    bInComplete = true;
-                                    break;
-                                }
-                                strOutput = strOutput + token.strTerm + "[" + term2weight[token.strTerm].ToString("0.##") + "]\t";
-                            }
-                        }
-                        if (bInComplete == false)
-                        {
-                            sw.WriteLine(strOutput);
+                            iTotalFreq += item.freq;
                         }
                         else
                         {
-                            Console.WriteLine("Incomplete query : {0}", pair.Key);
+                            Console.WriteLine("Invalidated Query Item");
                         }
                     }
+
+                    QueryItem rstQueryItem = new QueryItem();
+                    rstQueryItem.tokenList = new List<Token>();
+                    for (int i = 0; i < pair.Value[0].tokenList.Count; i++)
+                    {
+                        Token tkn = new Token();
+                        tkn.strTerm = pair.Value[0].tokenList[i].strTerm;
+                        tkn.strHash = pair.Value[0].tokenList[i].strHash;
+                        tkn.fWeight = 0.0;
+
+                        rstQueryItem.tokenList.Add(tkn);
+                    }
+
+                    bool bIgnore = false;
+                    for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
+                    {
+                        for (int j = 0; j < pair.Value.Count; j++)
+                        {
+                            if (pair.Value[j].tokenList == null)
+                            {
+                                Console.WriteLine("Invalidated Query Item");
+                                continue;
+                            }
+
+                            if (rstQueryItem.tokenList[i].strTerm != pair.Value[j].tokenList[i].strTerm)
+                            {
+                                Console.WriteLine("Query with different clicked url is inconsistent");
+                                bIgnore = true;
+                                break;
+                            }
+                            rstQueryItem.tokenList[i].fWeight += (((double)pair.Value[j].freq) / ((double)iTotalFreq)) * pair.Value[j].tokenList[i].fWeight;
+                        }
+
+                        if (bIgnore == true)
+                        {
+                            break;
+                        }
+                    }
+                    if (bIgnore == true)
+                    {
+                        continue;
+                    }
+
+                    string strOutput = pair.Key + "\t" + iTotalFreq.ToString() + "\t";
+                    for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
+                    {
+                        strOutput = strOutput + rstQueryItem.tokenList[i].strTerm + "[" + rstQueryItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
+                    }
+                    sw.WriteLine(strOutput);
                 }
             }
         }
 
+        //public static void MergeQueryWeight()
+        //{
+        //    foreach (KeyValuePair<string, List<QueryItem>> pair in query2Item)
+        //    {
+        //        if (pair.Value[0].tokenList == null)
+        //        {
+        //            //This query is invlidated, ignore it.
+        //            Console.WriteLine("Invalidated Query Item at index 0");
+        //            continue;
+        //        }
+
+        //        int maxFreq = 0;
+        //        int maxClusterFreq = 0;
+        //        int iTotalFreq = 0;
+        //        QueryItem bestItem = null;
+        //        foreach (QueryItem item in pair.Value)
+        //        {
+        //            iTotalFreq += item.freq;
+
+        //            if (item.freq > maxFreq)
+        //            {
+        //                maxFreq = item.freq;
+        //                maxClusterFreq = item.clusterFreq;
+        //                bestItem = item;
+        //            }
+        //            else if (item.freq == maxFreq && item.clusterFreq == maxClusterFreq)
+        //            {
+        //                maxFreq = item.freq;
+        //                maxClusterFreq = item.clusterFreq;
+        //                bestItem = item;
+        //            }
+        //        }
+        //        if (bestItem == null)
+        //        {
+        //            continue;
+        //        }
+
+        //        string strOutput = pair.Key + "\t" + maxFreq + "\t" + iTotalFreq.ToString() + "\t" + maxClusterFreq.ToString() +"\t";
+        //        for (int i = 0; i < bestItem.tokenList.Count; i++)
+        //        {
+        //            strOutput = strOutput + bestItem.tokenList[i].strTerm + "[" + bestItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
+        //        }
+        //        sw.WriteLine(strOutput);
+        //    }
+        //}
+
+        private static string GenerateHash(List<WordSeg.Token> wbTokenList, int index)
+        {
+            string leftRst = "";
+            if (index > 0)
+            {
+                leftRst = wbTokenList[index - 1].strTerm + wbTokenList[index].strTerm;
+            }
+            else
+            {
+                leftRst = "$B$" + wbTokenList[index].strTerm;
+            }
+
+            string rightRst = "";
+            if (index < wbTokenList.Count - 1)
+            {
+                rightRst = wbTokenList[index].strTerm + wbTokenList[index + 1].strTerm;
+            }
+            else
+            {
+                rightRst = wbTokenList[index].strTerm + "$E$";
+            }
+
+
+            return leftRst + "$_M_$" + rightRst;
+        }
+
         private static void StatTermWeightInQuery(List<QueryItem> qiList)
         {
-            new Dictionary<string, List<string>>();
-            List<List<string>> list = new List<List<string>>();
+            List<QueryItem> tmp_qiList = new List<QueryItem>();
             foreach (QueryItem item in qiList)
             {
                 wordseg.Segment(item.strQuery, tokens, false);
-                List<string> strTknList = new List<string>();
-                foreach (Token tkn in tokens.tokenList)
+                List<Token> tknList = new List<Token>();
+                bool bIgnored = false;
+                for (int i = 0;i < tokens.tokenList.Count;i++)
                 {
-                    //ignore null string
-                    if (tkn.strTerm.Length > 0)
+                    WordSeg.Token wbTkn = tokens.tokenList[i];
+                    if (wbTkn.strTerm.Length > 0)
                     {
-                        strTknList.Add(tkn.strTerm);
-                    }
-                }
-                list.Add(strTknList);
-            }
-            for (int i = 0; i < qiList.Count; i++)
-            {
-                Dictionary<string, int> term2Freq = new Dictionary<string, int>();
-                foreach (string item in list[i])
-                {
-                    if (!term2Freq.ContainsKey(item))
-                    {
-                        term2Freq.Add(item, qiList[i].freq);
+                        //ignore null string
+                        Token token = new Token();
+                        token.strTerm = wbTkn.strTerm;
+                        token.strHash = GenerateHash(tokens.tokenList, i);
+
+                        //check duplicate terms in a query
+                        for (int j = 0; j < tknList.Count; j++)
+                        {
+                            if (tknList[j].strTerm == token.strTerm)
+                            {
+                                //found it
+                                tknList[j].bDuplicate = true;
+                                token.bDuplicate = true;
+                                if (tknList[j].strHash == token.strHash)
+                                {
+                                    sw_dup.WriteLine(item.strQuery);
+                                    bIgnored = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (bIgnored == true)
+                        {
+                            break;
+                        }
+
+                        tknList.Add(token);
                     }
                 }
 
+                if (bIgnored == false)
+                {
+                    item.tokenList = tknList;
+                    tmp_qiList.Add(item);
+                }
+            }
+
+            qiList.Clear();
+            for (int i = 0;i < tmp_qiList.Count;i++)
+            {
+                Dictionary<Token, int> termHash2Freq = new Dictionary<Token, int>();
+                foreach (Token item in tmp_qiList[i].tokenList)
+                {
+                    termHash2Freq.Add(item, tmp_qiList[i].freq);
+                }
+
                 //Check all qiList[i]'s sub-query and statistic frequency
-                for (int j = 0; j < qiList.Count; j++)
+                for (int j = 0; j < tmp_qiList.Count; j++)
                 {
                     if (i != j)
                     {
-                        List<string> rstTokenList = new List<string>();
-                        if (AsubOfB(list[j], list[i], ref rstTokenList))
+                        List<Token> joinBList = new List<Token>();
+                        if (AsubOfB(tmp_qiList[j].tokenList, tmp_qiList[i].tokenList, joinBList) == true)
                         {
-                            HashSet<string> set = new HashSet<string>();
-                            foreach (string item in rstTokenList)
+                            foreach (Token item in joinBList)
                             {
-                                if (!set.Contains(item))
-                                {
-                                    set.Add(item);
-                                    term2Freq[item] += qiList[j].freq;
-                                }
+                                termHash2Freq[item] += tmp_qiList[j].freq;
+                            }
+                        }
+                        else if (AsubOfB_2(tmp_qiList[i].tokenList, tmp_qiList[j].tokenList, joinBList) == true)
+                        {
+                            foreach (Token item in joinBList)
+                            {
+                                termHash2Freq[item] += tmp_qiList[j].freq;
                             }
                         }
                     }
                 }
 
+
                 //Get term weight
                 int maxFreq = 0;
-                foreach (KeyValuePair<string, int> pair in term2Freq)
+                foreach (KeyValuePair<Token, int> pair in termHash2Freq)
                 {
                     if (maxFreq < pair.Value)
                     {
                         maxFreq = pair.Value;
                     }
                 }
-                foreach (string item in list[i])
+
+                if (maxFreq < MIN_CLUSTER_FREQUENCY)
                 {
-                    double fWeight = ((double)term2Freq[item]) / ((double)maxFreq);
-                    if (!qiList[i].token2weight.ContainsKey(item))
-                    {
-                        qiList[i].token2weight.Add(item, fWeight);
-                    }
+                    continue;
                 }
+                
+                foreach (Token item in tmp_qiList[i].tokenList)
+                {
+                    double fWeight = ((double)termHash2Freq[item]) / ((double)maxFreq);
+                    item.fWeight = fWeight;
+                }
+
+                //tmp_qiList[i].clusterFreq = maxFreq;
+                qiList.Add(tmp_qiList[i]);
             }
         }
     }

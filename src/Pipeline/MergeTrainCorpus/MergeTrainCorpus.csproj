@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{C2386AA8-A420-4376-8D35-93CBAD6E121D}</ProjectGuid>
+    <ProjectGuid>{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>QueryTermWeightAnalyzerConsole</RootNamespace>
-    <AssemblyName>QueryTermWeightAnalyzerConsole</AssemblyName>
+    <RootNamespace>MergeTrainCorpus</RootNamespace>
+    <AssemblyName>MergeTrainCorpus</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
@@ -25,10 +25,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\analyzer\</OutputPath>
+    <OutputPath>..\..\..\pipeline\BuildTrainingCorpus\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -45,12 +45,6 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Core\QueryTermWeightAnalyzer\QueryTermWeightAnalyzer.csproj">
-      <Project>{19366E4F-52B9-4DFE-8EF5-CFC283E50BA1}</Project>
-      <Name>QueryTermWeightAnalyzer</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

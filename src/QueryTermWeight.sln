@@ -17,6 +17,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QueryTermWeightAnalyzerCons
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TuningTermWeightThreshold", "Pipeline\TuningTermWeightThreshold\TuningTermWeightThreshold.csproj", "{7C95E725-95CF-4F17-81CF-0CC3543B8A84}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterUrl", "Pipeline\ClusterUrl\ClusterUrl.csproj", "{43F564DF-5886-4F6F-9273-30F9A667B177}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MergeTrainCorpus", "Pipeline\MergeTrainCorpus\MergeTrainCorpus.csproj", "{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BuildQueryTermWeightOrderCorpus", "Pipeline\BuildQueryTermWeightOrderCorpus\BuildQueryTermWeightOrderCorpus.csproj", "{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +93,36 @@ Global
 		{7C95E725-95CF-4F17-81CF-0CC3543B8A84}.Release|Mixed Platforms.Build.0 = Release|x86
 		{7C95E725-95CF-4F17-81CF-0CC3543B8A84}.Release|x86.ActiveCfg = Release|x86
 		{7C95E725-95CF-4F17-81CF-0CC3543B8A84}.Release|x86.Build.0 = Release|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Debug|x86.ActiveCfg = Debug|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Debug|x86.Build.0 = Debug|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Release|Any CPU.ActiveCfg = Release|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Release|Mixed Platforms.Build.0 = Release|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Release|x86.ActiveCfg = Release|x86
+		{43F564DF-5886-4F6F-9273-30F9A667B177}.Release|x86.Build.0 = Release|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Debug|x86.ActiveCfg = Debug|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Debug|x86.Build.0 = Debug|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Release|Any CPU.ActiveCfg = Release|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Release|Mixed Platforms.Build.0 = Release|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Release|x86.ActiveCfg = Release|x86
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6}.Release|x86.Build.0 = Release|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Debug|x86.ActiveCfg = Debug|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Debug|x86.Build.0 = Debug|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Release|Any CPU.ActiveCfg = Release|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Release|Mixed Platforms.Build.0 = Release|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Release|x86.ActiveCfg = Release|x86
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -96,6 +132,9 @@ Global
 		{3DDF37AB-131D-4C5D-BE3A-E92E7160DAF8} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
 		{33A69F8D-E656-49CA-8292-7838B0D5FCED} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
 		{7C95E725-95CF-4F17-81CF-0CC3543B8A84} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
+		{43F564DF-5886-4F6F-9273-30F9A667B177} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
+		{A966CABC-E4AA-46F5-8C25-3CE509D1FEC6} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
+		{001FE447-2DAC-4D5D-8CFB-0C23F1B13F01} = {3A67CCCC-2691-4028-A30E-90601F934FCC}
 		{19366E4F-52B9-4DFE-8EF5-CFC283E50BA1} = {430383C4-1D22-4936-AE9F-C9C561E03A1D}
 	EndGlobalSection
 EndGlobal

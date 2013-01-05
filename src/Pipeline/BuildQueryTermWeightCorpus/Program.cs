@@ -13,10 +13,21 @@ namespace BuildQueryTermWeightCorpus
         public double fWeight;
     }
 
+    public class ScoreItem
+    {
+        public double score;
+        public bool bThreshold;
+        public double gap;
+    }
+
     class Program
     {
         static WordSeg.WordSeg wordseg;
         static WordSeg.Tokens wbTokens;
+        static int MAX_THRESHOLD_NUM = 2;
+        const int SCORE_FACTOR = 20;
+        static double MIN_WEIGHT_SCORE_GAP = 0.1;
+        static SortedDictionary<int, int> gap2cnt = new SortedDictionary<int, int>();
 
         //Merge adjacent tokens with the sam weight score
         static List<Token> MergeTokenList(List<Token> tkList)
@@ -26,7 +37,7 @@ namespace BuildQueryTermWeightCorpus
 
             for (int i = 1; i < tkList.Count; i++)
             {
-                if (tkList[i].strTag == rstList[rstList.Count - 1].strTag)
+                if (tkList[i].fWeight == rstList[rstList.Count - 1].fWeight)
                 {
                     rstList[rstList.Count - 1].strTerm += tkList[i].strTerm;
                 }
@@ -58,29 +69,158 @@ namespace BuildQueryTermWeightCorpus
             return rstList;
         }
 
+        static bool CheckScoreListQuality(List<ScoreItem> scoreList)
+        {
+            for (int i = 1; i < scoreList.Count; i++)
+            {
+                if (scoreList[i].bThreshold != scoreList[i - 1].bThreshold)
+                {
+                    double sumGap = Math.Abs(scoreList[i].gap + scoreList[i - 1].gap);
+                    if (scoreList[i].gap / sumGap >= 0.2 && scoreList[i].gap / sumGap <= 0.8)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        //Calculate threshold list
+        //scoreList : all weight score in a query, the scores in the list must be sorted from big to small
+        //thresholdCnt : the number of thresholds
+        //minGap : the minimum score gap between two adjacent scores
+        static List<double> CalcThreshold(List<ScoreItem> scoreList, int thresholdCnt, double minGap)
+        {
+            //Calculate all score gaps
+            SortedList<double, List<ScoreItem>> gap2scoreList = new SortedList<double, List<ScoreItem>>();
+            double v = scoreList[0].score;
+            scoreList[0].gap = 0.0;
+            for (int i = 1; i < scoreList.Count; i++)
+            {
+                double gap = Math.Abs(v - scoreList[i].score);
+                if (gap2scoreList.ContainsKey(gap) == false)
+                {
+                    gap2scoreList.Add(gap, new List<ScoreItem>());
+                }
+                gap2scoreList[gap].Add(scoreList[i]);
+                scoreList[i].gap = gap;
+                v = scoreList[i].score;
+
+                int iGap = (int)(gap * SCORE_FACTOR);
+                if (gap2cnt.ContainsKey(iGap) == false)
+                {
+                    gap2cnt.Add(iGap, 0);
+                }
+                gap2cnt[iGap]++;
+            }
+
+            //Found the top-thresholdCnt max gaps and save thresholds
+            SortedList<double, bool> slist = new SortedList<double, bool>();
+            bool bEnough = false;
+            foreach (KeyValuePair<double, List<ScoreItem>> pair in gap2scoreList.Reverse())
+            {
+                if (pair.Key < minGap)
+                {
+                    break;
+                }
+
+                foreach (ScoreItem item in pair.Value)
+                {
+                    if (thresholdCnt <= 0)
+                    {
+                        bEnough = true;
+                        break;
+                    }
+                    thresholdCnt--;
+                    if (slist.ContainsKey(item.score) == false)
+                    {
+                        slist.Add(item.score, true);
+                        item.bThreshold = true;
+                    }
+                }
+
+                if (bEnough == true)
+                {
+                    break;
+                }
+            }
+
+            //Sort the thresholds from bigger to smaller, and save them into the result list
+            List<double> thresholdList = new List<double>();
+            foreach (KeyValuePair<double, bool> pair in slist.Reverse())
+            {
+                thresholdList.Add(pair.Key);
+            }
+
+            return thresholdList;
+        }
+
+        //The scores distribution
+        static bool CheckThreshold(List<ScoreItem> scoreList, List<double> thresholdList, double maxGapRate)
+        {
+            double topThreshold = 1.0;
+            for (int i = 0; i < thresholdList.Count; i++)
+            {
+                double maxScore = 0.0;
+                double minScore = 1.0;
+                for (int j = 0; j < scoreList.Count; j++)
+                {
+                    if (scoreList[j].score <= topThreshold && scoreList[j].score > thresholdList[i])
+                    {
+                        if (maxScore < scoreList[j].score)
+                        {
+                            maxScore = scoreList[j].score;
+                        }
+                        if (minScore > scoreList[j].score)
+                        {
+                            minScore = scoreList[j].score;
+                        }
+                    }
+                }
+
+                if ((maxScore - minScore) / (topThreshold - thresholdList[i]) >= maxGapRate)
+                {
+                    return false;
+                }
+
+                topThreshold = thresholdList[i];
+            }
+
+            //last part is not necessary to test
+
+            return true;
+        }
+
         static void Main(string[] args)
         {
-            if (args.Length != 4)
+            if (args.Length != 6)
             {
-                Console.WriteLine("BuildQueryTermWeightCorpus.txt [Min frequency in query] [Lexical dictionary file name] [Query term weight score file name] [Training corpus file name]");
+                Console.WriteLine("BuildQueryTermWeightCorpus.txt [Min frequency in query] [Query Segment Labels] [Min Segment Gap] [Lexical dictionary file name] [Query term weight score file name] [Training corpus file name]");
                 return;
             }
 
             int minFreq = int.Parse(args[0]);
 
+            string[] labItems = args[1].Split(',');
+
+            MAX_THRESHOLD_NUM = labItems.Length - 1;
+            MIN_WEIGHT_SCORE_GAP = double.Parse(args[2]);
+
             wordseg = new WordSeg.WordSeg();
             //Load lexical dictionary
-            wordseg.LoadLexicalDict(args[1], true);
+            wordseg.LoadLexicalDict(args[3], true);
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
 
-            StreamReader sr = new StreamReader(args[2]);
-            StreamWriter sw = new StreamWriter(args[3]);
+            StreamReader sr = new StreamReader(args[4]);
+            StreamWriter sw = new StreamWriter(args[5]);
 
             while (sr.EndOfStream == false)
             {
                 string strLine = sr.ReadLine();
                 string[] items = strLine.Split('\t');
+                string strRawQuery = items[0];
                 int queryFreq = int.Parse(items[1]);
 
                 //Ignore queries with less frequency
@@ -92,12 +232,10 @@ namespace BuildQueryTermWeightCorpus
                 try
                 {
                     //Get query features
-                    SortedDictionary<double, bool> sdict = new SortedDictionary<double, bool>();
-                    HashSet<string> setTerm = new HashSet<string>();
-                    bool dupTerm = false;
+                    SortedDictionary<double, int> sdict = new SortedDictionary<double, int>();
                     double maxWeight = -1.0;
                     double minWeight = 2.0;
-                    int core_cnt = 0;
+                    int coreTerm = 0;
                     for (int i = 2; i < items.Length; i++)
                     {
                         if (items[i].Trim().Length == 0)
@@ -111,19 +249,15 @@ namespace BuildQueryTermWeightCorpus
                         {
                             continue;
                         }
-                        if (setTerm.Contains(strTerm) == true)
-                        {
-                            dupTerm = true;
-                            break;
-                        }
-                        setTerm.Add(strTerm);
 
                         string strWeight = items[i].Substring(pos + 1, items[i].Length - (pos + 1) - 1);
                         double fWeight = double.Parse(strWeight);
                         if (sdict.ContainsKey(fWeight) == false)
                         {
-                            sdict.Add(fWeight, true);
+                            sdict.Add(fWeight, 0);
                         }
+                        sdict[fWeight] += strTerm.Length;
+
                         if (fWeight >= maxWeight)
                         {
                             maxWeight = fWeight;
@@ -133,21 +267,76 @@ namespace BuildQueryTermWeightCorpus
                             minWeight = fWeight;
                         }
 
-                        if (fWeight >= 0.98)
+                        if (fWeight == 1.0)
                         {
-                            core_cnt++;
+                            coreTerm++;
                         }
                     }
 
-                    //If query only contains single core term OR max weight is less than 1.0 OR
-                    //the query contains duplicated terms, the query will be ignored.
-                    if (core_cnt < 2 || maxWeight < 1.0 || dupTerm == true)
+                    //if (maxWeight < 1.0 || coreTerm < 2)
+                    //{
+                    //    continue;
+                    //}
+
+                    //Sort weight score list
+                    List<ScoreItem> scoreList = new List<ScoreItem>();
+                    foreach (KeyValuePair<double, int> pair in sdict.Reverse())
+                    {
+                        ScoreItem scoreItem = new ScoreItem();
+                        scoreItem.score = pair.Key;
+                        scoreItem.bThreshold = false;
+                        scoreItem.gap = 0.0;
+
+                        scoreList.Add(scoreItem);
+                    }
+
+                    if (scoreList.Count != MAX_THRESHOLD_NUM + 1)
                     {
                         continue;
                     }
 
-                    bool bIgnoreQuery = false;
-                    bool bOnlyRank0 = true;
+                    //Find top-ThresholdNum threshold value
+                    List<double> thresholdList = null;
+                    thresholdList = CalcThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
+                    if (thresholdList.Count != MAX_THRESHOLD_NUM)
+                    {
+                        continue;
+                    }
+
+                    if (CheckScoreListQuality(scoreList) == false)
+                    {
+                        continue;
+                    }
+
+                    //If distribution of score in each threshold is diversity, ignore the query
+                    if (CheckThreshold(scoreList, thresholdList, 0.10) == false)
+                    {
+                        continue;
+                    }
+
+                    if (thresholdList.Count > 0)
+                    {
+                        int coreCnt = 0;
+                        int otherCnt = 0;
+                        //Check core term
+                        foreach (KeyValuePair<double, int> pair in sdict)
+                        {
+                            if (pair.Key > thresholdList[0])
+                            {
+                                coreCnt += pair.Value;
+                            }
+                            else
+                            {
+                                otherCnt += pair.Value;
+                            }
+                        }
+                        if (coreCnt < 2)
+                        {
+                            continue;
+                        }
+                    }
+
+
                     List<Token> tkList = new List<Token>();
                     for (int i = 2; i < items.Length; i++)
                     {
@@ -170,48 +359,40 @@ namespace BuildQueryTermWeightCorpus
                         tk.fWeight = fWeight;
                         tk.strTerm = strTerm;
 
-                        //the thresholds below is generated by TuningTermWeightThreshold
-                        if (fWeight == 1.0)
+
+                        bool bProcessed = false;
+                        //Label tags according term's weight and thresholds
+                        for (int j = 0; j < thresholdList.Count; j++)
                         {
-                            tk.strTag = "RANK_0";
+                            if (fWeight > thresholdList[j])
+                            {
+                                tk.strTag = labItems[j];
+                                bProcessed = true;
+                                break;
+                            }
                         }
-                        else if (fWeight < 0.90 && fWeight >= 0.7)
+
+                        //Label the last part
+                        if (bProcessed == false)
                         {
-                            tk.strTag = "RANK_1";
-                            bOnlyRank0 = false;
-                        }
-                        else if (fWeight <= 0.35)
-                        {
-                            tk.strTag = "RANK_2";
-                            bOnlyRank0 = false;
-                        }
-                        else
-                        {
-                            bIgnoreQuery = true;
-                            break;
+                            int j = thresholdList.Count;
+                            tk.strTag = labItems[j];
                         }
 
                         tkList.Add(tk);
                     }
 
-                    if (bOnlyRank0 == true && queryFreq < 1000)
-                    {
-                        bIgnoreQuery = true;
-                    }
-
-                    if (bIgnoreQuery == true)
-                    {
-                        continue;
-                    }
-
-
-                    tkList = MergeTokenList(tkList);
-                    tkList = ResegmentTokenList(tkList);
+                    //tkList = MergeTokenList(tkList);
+                    //tkList = ResegmentTokenList(tkList);
                     string strOutput = "";
                     foreach (Token tk in tkList)
                     {
                         string strTag = tk.strTag;
-                        strOutput += tk.strTerm + "[" + strTag + "] ";
+                        //strOutput += tk.strTerm + "[" + strTag + "] ";
+                        foreach (char ch in tk.strTerm)
+                        {
+                            strOutput += ch.ToString() + "[" + strTag + "] ";
+                        }
                     }
 
                     //duplicate some query whose frequency is high
@@ -222,7 +403,7 @@ namespace BuildQueryTermWeightCorpus
                     }
                     for (int i = 0; i < logQueryFreq; i++)
                     {
-                        sw.WriteLine(strOutput.Trim());
+                        sw.WriteLine("{0}\t{1}\t{2}", strRawQuery, queryFreq, strOutput.Trim());
                     }
                 }
                 catch (Exception err)
@@ -236,7 +417,7 @@ namespace BuildQueryTermWeightCorpus
             sr.Close();
             sw.Close();
 
-  
+
         }
     }
 }

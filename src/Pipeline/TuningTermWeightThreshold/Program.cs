@@ -8,14 +8,17 @@ namespace TuningTermWeightThreshold
 {
     class Program
     {
-        const int THRESHOLD_NUM = 2;
+        const int MAX_THRESHOLD_NUM = 2;
         const int SCORE_FACTOR = 20;
-        const int WEIGHT_LEVEL_NUM = THRESHOLD_NUM + 1;
+        const int WEIGHT_LEVEL_NUM = MAX_THRESHOLD_NUM + 1;
+        const double MAX_WEIGHT_SCORE = 1.0;
+        const double MIN_WEIGHT_SCORE_GAP = 0.05;
+
 
         static SortedDictionary<int, int> gap2cnt = new SortedDictionary<int, int>();
 
         //The scores distribution
-        static bool CheckThreshold(List<double> scoreList, List<double> thresholdList)
+        static bool CheckThreshold(List<double> scoreList, List<double> thresholdList, double maxGapRate)
         {
             double topThreshold = 1.0;
             for (int i = 0; i < thresholdList.Count; i++)
@@ -37,7 +40,7 @@ namespace TuningTermWeightThreshold
                     }
                 }
 
-                if (maxScore - minScore >= 0.15)
+                if ((maxScore - minScore) / (topThreshold - thresholdList[i]) >= maxGapRate)
                 {
                     return false;
                 }
@@ -156,8 +159,6 @@ namespace TuningTermWeightThreshold
                 {
                     //Get query features
                     SortedDictionary<double, bool> sdict = new SortedDictionary<double, bool>();
-                    HashSet<string> setTerm = new HashSet<string>();
-                    bool dupTerm = false;
                     double maxWeight = -1.0;
                     double minWeight = 2.0;
                     int core_cnt = 0;
@@ -174,12 +175,6 @@ namespace TuningTermWeightThreshold
                         {
                             continue;
                         }
-                        if (setTerm.Contains(strTerm) == true)
-                        {
-                            dupTerm = true;
-                            break;
-                        }
-                        setTerm.Add(strTerm);
 
                         string strWeight = items[i].Substring(pos + 1, items[i].Length - (pos + 1) - 1);
                         double fWeight = double.Parse(strWeight);
@@ -196,18 +191,17 @@ namespace TuningTermWeightThreshold
                             minWeight = fWeight;
                         }
 
-                        if (fWeight >= 0.98)
+                        if (fWeight >= MAX_WEIGHT_SCORE)
                         {
                             core_cnt++;
                         }
                     }
 
-                    //If query only contains single core term OR max weight is less than 1.0 OR
-                    //the query contains duplicated terms, the query will be ignored.
-                    if (core_cnt < 2 || maxWeight < 1.0 || dupTerm == true)
-                    {
-                        continue;
-                    }
+                    //If query only contains single core term OR max weight is less than 1.0
+                    //if (core_cnt < 2 || maxWeight < MAX_WEIGHT_SCORE)
+                    //{
+                    //    continue;
+                    //}
 
                     //Sort weight score list
                     List<double> scoreList = new List<double>();
@@ -217,16 +211,18 @@ namespace TuningTermWeightThreshold
                     }
 
                     //Find top-ThresholdNum threshold value
-                    List<double> thresholdList;
-                    thresholdList = CalcThreshold(scoreList, THRESHOLD_NUM, 0.10);
+                    List<double> thresholdList = null;
+                    for (int i = 1; i <= MAX_THRESHOLD_NUM; i++)
+                    {
+                        thresholdList = CalcThreshold(scoreList, i, MIN_WEIGHT_SCORE_GAP);
+                        //If distribution of score in each threshold is diversity, ignore the query
+                        if (CheckThreshold(scoreList, thresholdList, 0.20) == true)
+                        {
+                            break;
+                        }
+                    }
 
-                    //If distribution of score in each threshold is diversity, ignore the query
-                    //if (CheckThreshold(scoreList, thresholdList) == false)
-                    //{
-                    //    continue;
-                    //}
-
-                    if (thresholdList.Count != THRESHOLD_NUM)
+                    if (thresholdList == null)
                     {
                         continue;
                     }
@@ -254,16 +250,22 @@ namespace TuningTermWeightThreshold
                         {
                             if (fWeight > thresholdList[j])
                             {
+                                int rpos = j;
+                                if (rpos > 0)
+                                {
+                                    rpos = j + MAX_THRESHOLD_NUM - thresholdList.Count;
+                                }
+
                                 bProcessed = true;
-                                arrSumRankWeight[j] += fWeight;
-                                arrRankFreq[j]++;
+                                arrSumRankWeight[rpos] += fWeight;
+                                arrRankFreq[rpos]++;
 
                                 int iWeight = (int)(fWeight * SCORE_FACTOR);
-                                if (arrRank2Freq[j].ContainsKey(iWeight) == false)
+                                if (arrRank2Freq[rpos].ContainsKey(iWeight) == false)
                                 {
-                                    arrRank2Freq[j].Add(iWeight, 0);
+                                    arrRank2Freq[rpos].Add(iWeight, 0);
                                 }
-                                arrRank2Freq[j][iWeight]++;
+                                arrRank2Freq[rpos][iWeight]++;
 
                                 break;
                             }
@@ -273,15 +275,21 @@ namespace TuningTermWeightThreshold
                         if (bProcessed == false)
                         {
                             int j = thresholdList.Count;
-                            arrSumRankWeight[j] += fWeight;
-                            arrRankFreq[j]++;
+                            int rpos = j;
+                            if (rpos > 0)
+                            {
+                                rpos = j + MAX_THRESHOLD_NUM - thresholdList.Count;
+                            }
+
+                            arrSumRankWeight[rpos] += fWeight;
+                            arrRankFreq[rpos]++;
 
                             int iWeight = (int)(fWeight * SCORE_FACTOR);
-                            if (arrRank2Freq[j].ContainsKey(iWeight) == false)
+                            if (arrRank2Freq[rpos].ContainsKey(iWeight) == false)
                             {
-                                arrRank2Freq[j].Add(iWeight, 0);
+                                arrRank2Freq[rpos].Add(iWeight, 0);
                             }
-                            arrRank2Freq[j][iWeight]++;
+                            arrRank2Freq[rpos][iWeight]++;
                         }
                     }
             
