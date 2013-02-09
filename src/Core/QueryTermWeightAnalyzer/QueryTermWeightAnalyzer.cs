@@ -155,59 +155,6 @@ namespace QueryTermWeightAnalyzer
             return null;
         }
 
-        public string GetTermOrderTag(List<string> strTagList)
-        {
-            foreach (string item in strTagList)
-            {
-                if (item == ">" || item == "=" || item == "<" || item == "E")
-                {
-                    return item;
-                }
-            }
-            return null;
-        }
-
-        public void ConvertOrderToRank(List<Token> tokenList)
-        {
-            int maxRank = -10;
-            int minRank = 10;
-            int currRank = 0;
-            foreach (Token token in tokenList)
-            {
-                if (token.strTag == ">")
-                {
-                    currRank--;
-                    if (currRank > maxRank)
-                    {
-                        maxRank = currRank;
-                    }
-                }
-                else if (token.strTag == "<")
-                {
-                    currRank++;
-                    if (currRank < minRank)
-                    {
-                        minRank = currRank;
-                    }
-                }
-            }
-
-            currRank = 0;
-            foreach (Token token in tokenList)
-            {
-                token.strTag = "RANK_" + Math.Abs(currRank - maxRank).ToString();
-                if (token.strTag == ">")
-                {
-                    currRank--;
-                }
-                else if (token.strTag == "<")
-                {
-                    currRank++;
-                }
-            }
-        }
-
-
         public List<Token> LabelString(string strText)
         {
             List<Token> tknList = new List<Token>();
@@ -218,7 +165,7 @@ namespace QueryTermWeightAnalyzer
                 tkn.offset = wbTokens.tokenList[i].offset;
                 tkn.length = wbTokens.tokenList[i].len;
                 tkn.strTerm = wbTokens.tokenList[i].strTerm;
-                tkn.strTag = GetTermOrderTag(wbTokens.tokenList[i].strTagList);
+                tkn.strTag = GetTermRankTag(wbTokens.tokenList[i].strTagList);
 
                 tknList.Add(tkn);
             }
@@ -229,6 +176,10 @@ namespace QueryTermWeightAnalyzer
         public List<Token> Analyze(string strText)
         {
             List<Token> tknList = LabelString(strText);
+
+            int rank0Cnt = 0;
+            int rank1Cnt = 0;
+            int rank2Cnt = 0;
             for (int i = 0; i < tknList.Count; i++)
             {
                 double probLeftTerm = 0.0, probRightTerm = 0.0;
@@ -264,15 +215,50 @@ namespace QueryTermWeightAnalyzer
                 if (tknList[i].strTag.Contains("RANK_0") == true)
                 {
                     tknList[i].strTag = "RANK_0";
+                    rank0Cnt++;
                 }
                 else if (tknList[i].strTag.Contains("RANK_1") == true)
                 {
                     tknList[i].strTag = "RANK_1";
+                    rank1Cnt++;
                 }
                 else
                 {
                     tknList[i].strTag = "RANK_2";
+                    rank2Cnt++;
                 }
+            }
+
+            if (rank0Cnt <= 1)
+            {
+                rank0Cnt = 0;
+                rank1Cnt = 0;
+                rank2Cnt = 0;
+                for (int i = 0; i < tknList.Count; i++)
+                {
+                    if (tknList[i].strTag == "RANK_1")
+                    {
+                        tknList[i].strTag = "RANK_0";
+                        rank0Cnt++;
+                    }
+                    else if (tknList[i].strTag == "RANK_2")
+                    {
+                        tknList[i].strTag = "RANK_1";
+                        rank1Cnt++;
+                    }
+                }
+            }
+
+            if (rank2Cnt >= rank0Cnt + rank1Cnt)
+            {
+                for (int i = 0; i < tknList.Count; i++)
+                {
+                    if (tknList[i].strTag == "RANK_2")
+                    {
+                        tknList[i].strTag = "RANK_1";
+                    }
+                }
+
             }
 
             return tknList;

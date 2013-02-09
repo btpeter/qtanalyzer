@@ -76,7 +76,7 @@ namespace BuildQueryTermWeightCorpus
                 if (scoreList[i].bThreshold != scoreList[i - 1].bThreshold)
                 {
                     double sumGap = Math.Abs(scoreList[i].gap + scoreList[i - 1].gap);
-                    if (scoreList[i].gap / sumGap >= 0.2 && scoreList[i].gap / sumGap <= 0.8)
+                    if (scoreList[i].gap / sumGap >= 0.1 && scoreList[i].gap / sumGap <= 0.9)
                     {
                         return false;
                     }
@@ -212,6 +212,12 @@ namespace BuildQueryTermWeightCorpus
             wordseg.LoadLexicalDict(args[3], true);
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
+
+            if (File.Exists(args[4]) == false)
+            {
+                Console.WriteLine("Query term weight file {0} is not existed.", args[4]);
+                return;
+            }
 
             StreamReader sr = new StreamReader(args[4]);
             StreamWriter sw = new StreamWriter(args[5]);
@@ -395,16 +401,16 @@ namespace BuildQueryTermWeightCorpus
                         }
                     }
 
-                    //duplicate some query whose frequency is high
-                    int logQueryFreq = (int)Math.Log10(queryFreq);
-                    if (logQueryFreq == 0)
-                    {
-                        logQueryFreq++;
-                    }
-                    for (int i = 0; i < logQueryFreq; i++)
-                    {
+                    ////duplicate some query whose frequency is high
+                    //int logQueryFreq = (int)Math.Log10(queryFreq);
+                    //if (logQueryFreq == 0)
+                    //{
+                    //    logQueryFreq++;
+                    //}
+                    //for (int i = 0; i < logQueryFreq; i++)
+                    //{
                         sw.WriteLine("{0}\t{1}\t{2}", strRawQuery, queryFreq, strOutput.Trim());
-                    }
+                    //}
                 }
                 catch (Exception err)
                 {

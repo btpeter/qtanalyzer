@@ -42,7 +42,8 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="wordseg">
+    <Reference Include="wordseg, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\dll\wordseg.dll</HintPath>
     </Reference>
   </ItemGroup>

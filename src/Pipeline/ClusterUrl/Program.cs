@@ -5,13 +5,20 @@ using System.Text;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using AdvUtils;
 
 namespace ClusterUrl
 {
-    class UrlEntity
+    class UrlEntity : IComparable<UrlEntity>
     {
         public string strUrl;
         public List<QueryItem> featureSet;
+
+
+        public int CompareTo(UrlEntity other)
+        {
+            return featureSet.Count - other.featureSet.Count;
+        }
     }
 
     class QueryItem
@@ -32,19 +39,19 @@ namespace ClusterUrl
 
             StreamReader sr = new StreamReader(args[0]);
             int maxQueryId = 0;
-            Dictionary<string, int> query2Id = new Dictionary<string, int>();
-            Dictionary<int, string> id2query = new Dictionary<int,string>();
+            BigDictionary<string, int> query2Id = new BigDictionary<string, int>();
+            BigDictionary<int, string> id2query = new BigDictionary<int,string>();
 
-            List<UrlEntity> entityList = new List<UrlEntity>();
+            VarBigArray<UrlEntity> entityList = new VarBigArray<UrlEntity>(1024);
+            long entityListSize = 0;
 
             Console.WriteLine("Loading url set and building feature set...");
             int maxLine = 0;
             int minFreq = int.Parse(args[2]);
-
-            while (sr.EndOfStream == false)
+            string strLine = null;
+            while ((strLine = sr.ReadLine()) != null)
             {
                 //Query \t Url \t Freq
-                string strLine = sr.ReadLine();
                 string[] items = strLine.Split('\t');
                 items[0] = items[0].ToLower().Trim();
                 items[1] = items[1].ToLower().Trim();
@@ -75,17 +82,18 @@ namespace ClusterUrl
                 qi.qid = query2Id[items[0]];
                 qi.weight = weight;
 
-                if (entityList.Count == 0)
+                if (entityListSize == 0)
                 {
                     UrlEntity entity = new UrlEntity();
                     entity.strUrl = strUrl;
                     entity.featureSet = new List<QueryItem>();
                     entity.featureSet.Add(qi);
-                    entityList.Add(entity);
+                    entityList[entityListSize] = entity;
+                    entityListSize++;
                 }
-                else if (entityList[entityList.Count - 1].strUrl == strUrl)
+                else if (entityList[entityListSize - 1].strUrl == strUrl)
                 {
-                    entityList[entityList.Count - 1].featureSet.Add(qi);
+                    entityList[entityListSize - 1].featureSet.Add(qi);
                 }
                 else
                 {
@@ -93,22 +101,24 @@ namespace ClusterUrl
                     entity.strUrl = strUrl;
                     entity.featureSet = new List<QueryItem>();
                     entity.featureSet.Add(qi);
-                    entityList.Add(entity);
+                    entityList[entityListSize] = entity;
+                    entityListSize++;
                 }
 
             }
             sr.Close();
 
             Console.WriteLine("Clustring urls...");
-            //entityList = Clustring(entityList);
-            entityList = RemoveUrlsWithLowQualityFeature(entityList);
-            entityList = ClusterUrlsWithSameFeatures(entityList);
+            entityList = RemoveUrlsWithLowQualityFeature(entityList, ref entityListSize);
+            entityList = ClusterUrlsWithSameFeatures(entityList, ref entityListSize);
 
 
             Console.WriteLine("Saving query clustered_id freq file ordered by clustered id...");
             StreamWriter sw = new StreamWriter(args[1]);
-            foreach (UrlEntity item in entityList)
+
+            for (long i = 0;i < entityListSize;i++)
             {
+                UrlEntity item = entityList[i];
                 foreach (QueryItem qi in item.featureSet)
                 {
                     sw.WriteLine("{0}\t{1}\t{2}", id2query[qi.qid], item.strUrl, qi.weight);
@@ -118,69 +128,13 @@ namespace ClusterUrl
             sw.Close();
         }
 
-        private static double GetSimilairyScore(List<QueryItem> qi1, List<QueryItem> qi2)
+        //If two urls have the same cliked query set, these two urls should be merged as one url
+        private static VarBigArray<UrlEntity> ClusterUrlsWithSameFeatures(VarBigArray<UrlEntity> entityList, ref long entityListSize)
         {
-            int i = 0, j = 0;
-            int joinCnt = 0;
-            int qi1Size = qi1.Count;
-            int qi2Size = qi2.Count;
-            while (i < qi1Size && j < qi2Size)
+            BigDictionary<string, UrlEntity> key2entity = new BigDictionary<string, UrlEntity>();
+            for (long k = 0;k < entityListSize;k++)
             {
-                if (qi1[i].qid < qi2[j].qid)
-                {
-                    i++;
-                }
-                else if (qi1[i].qid > qi2[j].qid)
-                {
-                    j++;
-                }
-                else
-                {
-                    i++; j++;
-                    joinCnt++;
-                }
-            }
-
-            if (joinCnt == 0)
-            {
-                return 0.0;
-            }
-
-            return (double)joinCnt / (double)(qi1Size + qi2Size - joinCnt);
-        }
-
-        private static List<QueryItem> MergeQueryItem(List<QueryItem> qiList)
-        {
-            Dictionary<int, int> qid2weight = new Dictionary<int, int>();
-            foreach (QueryItem item in qiList)
-            {
-                if (qid2weight.ContainsKey(item.qid) == false)
-                {
-                    qid2weight.Add(item.qid, 0);
-                }
-                qid2weight[item.qid] += item.weight;
-            }
-
-            List<QueryItem> rst = new List<QueryItem>();
-            foreach (KeyValuePair<int, int> pair in qid2weight)
-            {
-                QueryItem qi = new QueryItem();
-                qi.qid = pair.Key;
-                qi.weight = pair.Value;
-
-                rst.Add(qi);
-            }
-
-            rst.Sort((x, y) => x.qid - y.qid);
-
-            return rst;
-        }
-
-        private static List<UrlEntity> ClusterUrlsWithSameFeatures(List<UrlEntity> entityList)
-        {
-            Dictionary<string, UrlEntity> key2entity = new Dictionary<string, UrlEntity>();
-            foreach (UrlEntity item in entityList)
-            {
+                UrlEntity item = entityList[k];
                 //Generate qid-key
                 StringBuilder sb = new StringBuilder();
                 foreach (QueryItem qi in item.featureSet)
@@ -201,6 +155,7 @@ namespace ClusterUrl
                         if (key2entity[sb.ToString()].featureSet[i].qid != item.featureSet[i].qid)
                         {
                             Console.WriteLine("Key is inconsistent!");
+                            entityListSize = 0;
                             return null;
                         }
                         key2entity[sb.ToString()].featureSet[i].weight += item.featureSet[i].weight;
@@ -208,118 +163,42 @@ namespace ClusterUrl
                 }
             }
 
-            List<UrlEntity> rst = new List<UrlEntity>();
+            VarBigArray<UrlEntity> rst = new VarBigArray<UrlEntity>(1024);
+            long rstSize = 0;
             foreach (KeyValuePair<string, UrlEntity> pair in key2entity)
             {
-                rst.Add(pair.Value);
+                rst[rstSize] = pair.Value;
+                rstSize++;
             }
-
-            rst.Sort((x, y) => x.featureSet.Count - y.featureSet.Count);
-
+            rst.Sort(0, rstSize);
+            entityListSize = rstSize;
             return rst;
         }
 
-        private static List<UrlEntity> RemoveUrlsWithLowQualityFeature(List<UrlEntity> entityList)
+        //If the url is clicked by only one query, OR 
+        //(the url is a directionary, not a page, and it is cliked by more than 5 unique queries),
+        //the url should be dropped.
+        private static VarBigArray<UrlEntity> RemoveUrlsWithLowQualityFeature(VarBigArray<UrlEntity> entityList, ref long entityListSize)
         {
-            List<UrlEntity> entityList2 = new List<UrlEntity>();
-            foreach (UrlEntity item in entityList)
+            VarBigArray<UrlEntity> entityList2 = new VarBigArray<UrlEntity>(1024);
+            long entityList2Size = 0;
+
+            for (long i = 0;i < entityListSize;i++)
             {
-                if (item.featureSet.Count <= 1 || (item.strUrl.EndsWith("/") == true && item.featureSet.Count > 5))
+                UrlEntity item = entityList[i];
+                //If too small or many unique query point to a special query, ignore this url
+                if (item.featureSet.Count <= 1 || item.featureSet.Count > 500)
                 {
                     continue;
                 }
 
                 item.featureSet.Sort((x, y) => x.qid - y.qid);
-                entityList2.Add(item);
+                entityList2[entityList2Size] = item;
+                entityList2Size++;
             }
+            entityListSize = entityList2Size;
+
             return entityList2;
-        }
-
-        private static List<UrlEntity> Clustring(List<UrlEntity> entityList)
-        {
-            entityList = RemoveUrlsWithLowQualityFeature(entityList);
-            entityList = ClusterUrlsWithSameFeatures(entityList);
-
-            bool bMergeEntity = false;
-            int iterCnt = 0;
-            do
-            {
-                iterCnt++;
-                bMergeEntity = false;
-                List<UrlEntity> newEntityList = new List<UrlEntity>();
-
-                for (int i = 0; i < entityList.Count; i++)
-                {
-                    if (i % 10 == 0)
-                    {
-                        Console.WriteLine("Iter {0}, {1}/{2} processed...", iterCnt, i, entityList.Count);
-                    }
-
-                    double maxSim = 0.0;
-                    int bestIndex = -1;
-                    int lastFeaSize = 0;
-                    int iFeaSize = entityList[i].featureSet.Count;
-                    List<QueryItem> iQueryItemList = entityList[i].featureSet;
-                    for (int j = i + 1; j < entityList.Count; j++)
-                    {
-                        List<QueryItem> jQueryItemList = entityList[j].featureSet;
-
-                        if (iFeaSize == jQueryItemList.Count && iFeaSize <= 3)
-                        {
-                            continue;
-                        }
-
-
-                        if (lastFeaSize != jQueryItemList.Count)
-                        {
-                            lastFeaSize = jQueryItemList.Count;
-                            //pre-judge
-                            double r1 = (double)iFeaSize / (double)lastFeaSize;
-                            if (r1 < 0.8)
-                            {
-                                break;
-                            }
-                        }
-
-                        double sim = GetSimilairyScore(iQueryItemList, jQueryItemList);
-                        if (sim >= maxSim)
-                        {
-                            bestIndex = j;
-                            maxSim = sim;
-                        }
-                        if (sim == 1.0)
-                        {
-                            break;
-                        }
-                    }
-                    if (maxSim >= 0.8)
-                    {
-                        UrlEntity entity = new UrlEntity();
-                        entity.strUrl = entityList[i].strUrl;
-                        entity.featureSet = new List<QueryItem>(entityList[i].featureSet);
-
-                        entity.featureSet.AddRange(entityList[bestIndex].featureSet);
-                        entity.featureSet = MergeQueryItem(entity.featureSet);
-
-                        entityList.RemoveAt(bestIndex);
-                        bMergeEntity = true;
-
-                        newEntityList.Add(entity);
-                    }
-                    else
-                    {
-                        newEntityList.Add(entityList[i]);
-                    }
-                }
-
-                Console.WriteLine("Iter {0} : Merge entity from {1} to {2}", iterCnt, entityList.Count, newEntityList.Count);
-                entityList = newEntityList;
-                entityList = ClusterUrlsWithSameFeatures(entityList);
-
-            } while (bMergeEntity == true);
-
-            return entityList;
-
         }
     }
 }

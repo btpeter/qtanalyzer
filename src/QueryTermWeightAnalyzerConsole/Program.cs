@@ -28,12 +28,23 @@ namespace QueryTermWeightAnalyzerConsole
                 List<Token> tknList;
                 tknList = analyzer.Analyze(strLine);
 
-                string strOutput = "";
-                foreach (Token token in tknList)
+                if (tknList.Count > 0)
                 {
-                    strOutput += token.strTerm + "[" + token.strTag + "] ";
+                    string strOutput = tknList[0].strTerm;
+                    string strTag = tknList[0].strTag;
+                    for (int i = 1; i < tknList.Count; i++)
+                    {
+                        if (tknList[i].strTag != strTag)
+                        {
+                            strOutput += "[" + strTag + "] ";
+                            strTag = tknList[i].strTag;
+                        }
+                        strOutput += tknList[i].strTerm;
+                    }
+                    strOutput += "[" + strTag + "] ";
+
+                    sw.WriteLine(strOutput.Trim());
                 }
-                sw.WriteLine(strOutput.Trim());
             }
             sr.Close();
             sw.Close();
