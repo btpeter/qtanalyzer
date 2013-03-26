@@ -29,6 +29,22 @@ namespace ClusterUrl
 
     class Program
     {
+        public static string ToDBC(string input)
+        {
+            char[] c = input.ToCharArray();
+            for (int i = 0; i < c.Length; i++)
+            {
+                if (c[i] == 12288)
+                {
+                    c[i] = (char)32;
+                    continue;
+                }
+                if (c[i] > 65280 && c[i] < 65375)
+                    c[i] = (char)(c[i] - 65248);
+            }
+            return new string(c);
+        }
+
         static void Main(string[] args)
         {
             if (args.Length != 3)
@@ -53,7 +69,11 @@ namespace ClusterUrl
             {
                 //Query \t Url \t Freq
                 string[] items = strLine.Split('\t');
-                items[0] = items[0].ToLower().Trim();
+
+                string strQuery = items[0].ToLower().Trim();
+                strQuery = ToDBC(strQuery);
+                strQuery = strQuery.ToLower().Trim().Replace(" ", "").Replace("　", "");
+
                 items[1] = items[1].ToLower().Trim();
 
                 string strUrl = items[1];
@@ -69,17 +89,17 @@ namespace ClusterUrl
                 }
                 maxLine++;
 
-                if (query2Id.ContainsKey(items[0]) == false)
+                if (query2Id.ContainsKey(strQuery) == false)
                 {
-                    query2Id.Add(items[0], maxQueryId);
-                    id2query.Add(maxQueryId, items[0]);
+                    query2Id.Add(strQuery, maxQueryId);
+                    id2query.Add(maxQueryId, strQuery);
                     maxQueryId++;
                 }
 
                 
 
                 QueryItem qi = new QueryItem();
-                qi.qid = query2Id[items[0]];
+                qi.qid = query2Id[strQuery];
                 qi.weight = weight;
 
                 if (entityListSize == 0)

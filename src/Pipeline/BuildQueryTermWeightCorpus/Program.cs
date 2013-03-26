@@ -76,7 +76,7 @@ namespace BuildQueryTermWeightCorpus
                 if (scoreList[i].bThreshold != scoreList[i - 1].bThreshold)
                 {
                     double sumGap = Math.Abs(scoreList[i].gap + scoreList[i - 1].gap);
-                    if (scoreList[i].gap / sumGap >= 0.1 && scoreList[i].gap / sumGap <= 0.9)
+                    if (scoreList[i].gap / sumGap >= 0.05 && scoreList[i].gap / sumGap <= 0.95)
                     {
                         return false;
                     }
@@ -157,6 +157,7 @@ namespace BuildQueryTermWeightCorpus
         }
 
         //The scores distribution
+        //For each scores range (from threshold[i] to threshold[i+1]), check the ratio between scores length and threshold length
         static bool CheckThreshold(List<ScoreItem> scoreList, List<double> thresholdList, double maxGapRate)
         {
             double topThreshold = 1.0;
@@ -279,10 +280,10 @@ namespace BuildQueryTermWeightCorpus
                         }
                     }
 
-                    //if (maxWeight < 1.0 || coreTerm < 2)
-                    //{
-                    //    continue;
-                    //}
+                    if (maxWeight < 1.0 || coreTerm < 2)
+                    {
+                        continue;
+                    }
 
                     //Sort weight score list
                     List<ScoreItem> scoreList = new List<ScoreItem>();
@@ -296,10 +297,10 @@ namespace BuildQueryTermWeightCorpus
                         scoreList.Add(scoreItem);
                     }
 
-                    if (scoreList.Count != MAX_THRESHOLD_NUM + 1)
-                    {
-                        continue;
-                    }
+                    //if (scoreList.Count != MAX_THRESHOLD_NUM + 1)
+                    //{
+                    //    continue;
+                    //}
 
                     //Find top-ThresholdNum threshold value
                     List<double> thresholdList = null;
@@ -315,7 +316,7 @@ namespace BuildQueryTermWeightCorpus
                     }
 
                     //If distribution of score in each threshold is diversity, ignore the query
-                    if (CheckThreshold(scoreList, thresholdList, 0.10) == false)
+                    if (CheckThreshold(scoreList, thresholdList, 0.05) == false)
                     {
                         continue;
                     }
@@ -388,29 +389,15 @@ namespace BuildQueryTermWeightCorpus
                         tkList.Add(tk);
                     }
 
-                    //tkList = MergeTokenList(tkList);
-                    //tkList = ResegmentTokenList(tkList);
+                    tkList = MergeTokenList(tkList);
+                    tkList = ResegmentTokenList(tkList);
                     string strOutput = "";
                     foreach (Token tk in tkList)
                     {
                         string strTag = tk.strTag;
-                        //strOutput += tk.strTerm + "[" + strTag + "] ";
-                        foreach (char ch in tk.strTerm)
-                        {
-                            strOutput += ch.ToString() + "[" + strTag + "] ";
-                        }
+                        strOutput += tk.strTerm + "[" + strTag + "] ";
                     }
-
-                    ////duplicate some query whose frequency is high
-                    //int logQueryFreq = (int)Math.Log10(queryFreq);
-                    //if (logQueryFreq == 0)
-                    //{
-                    //    logQueryFreq++;
-                    //}
-                    //for (int i = 0; i < logQueryFreq; i++)
-                    //{
-                        sw.WriteLine("{0}\t{1}\t{2}", strRawQuery, queryFreq, strOutput.Trim());
-                    //}
+                    sw.WriteLine("{0}\t{1}\t{2}", strRawQuery, queryFreq, strOutput.Trim());
                 }
                 catch (Exception err)
                 {

@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{9CAE0C17-85FA-44A9-88C8-C990CE70C22F}</ProjectGuid>
+    <ProjectGuid>{EA8FB472-ED86-4674-887D-BE67F02E4785}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>QueryTermSynAnalyzerConsole</RootNamespace>
-    <AssemblyName>QueryTermSynAnalyzerConsole</AssemblyName>
+    <RootNamespace>ConvertTermWeightRankToOrder</RootNamespace>
+    <AssemblyName>ConvertTermWeightRankToOrder</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
@@ -28,7 +28,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\analyzer\QueryTermSynonym\</OutputPath>
+    <OutputPath>..\..\..\pipeline\BuildTrainingCorpus\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -41,16 +41,14 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+    <Reference Include="wordseg, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\dll\wordseg.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Core\QueryTermSynonymAnalyzer\QueryTermSynonymAnalyzer.csproj">
-      <Project>{D1DEBE37-7A4F-4EBE-84C9-686946EDB372}</Project>
-      <Name>QueryTermSynonymAnalyzer</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

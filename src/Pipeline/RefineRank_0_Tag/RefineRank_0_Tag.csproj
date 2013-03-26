@@ -5,11 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{797B29FE-2273-4251-AFF8-4855098448B7}</ProjectGuid>
+    <ProjectGuid>{C4391C6E-8F6B-483A-8EC4-5D8E62C3BC7D}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>RewriteRankTags</RootNamespace>
-    <AssemblyName>RewriteRankTags</AssemblyName>
+    <RootNamespace>RefineRank_0_Tag</RootNamespace>
+    <AssemblyName>RefineRank_0_Tag</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
@@ -28,7 +28,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\pipeline\BuildTrainingCorpus\</OutputPath>
+    <OutputPath>..\..\..\pipeline\BuildTrainingCorpus\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>

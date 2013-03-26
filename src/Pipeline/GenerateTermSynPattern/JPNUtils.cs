@@ -32,46 +32,5 @@ namespace GenerateTermSynPattern
                 }
                 return new string(c);
             }
-
-            //public static bool IsHalfKana(string targetStr)
-            //{
-            //    string halfKanaList = "ｰﾞﾟｧｨｩｪｫｬｭｮｯｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ";
-            //    foreach (char strItem in targetStr)
-            //    {
-            //        if (!halfKanaList.Contains(strItem.ToString()))
-            //        {
-            //            return false;
-            //        }
-            //    }
-            //    return true;
-            //}
-            //public static string ToHalfKana(string str)
-            //{
-            //    string strFullKanaListPart1 = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンーャュョァィゥェォッ゛゜";
-            //    string strFullKanaListPart2 = "ヴ,ガ,ギ,グ,ゲ,ゴ,ザ,ジ,ズ,ゼ,ゾ,ダ,ヂ,ヅ,デ,ド,バ,ビ,ブ,ベ,ボ,パ,ピ,プ,ペ,ポ";
-            //    string strHarfKanaPart1 = "ｳﾞ,ｶﾞ,ｷﾞ,ｸﾞ,ｹﾞ,ｺﾞ,ｻﾞ,ｼﾞ,ｽﾞ,ｾﾞ,ｿﾞ,ﾀﾞ,ﾁﾞ,ﾂﾞ,ﾃﾞ,ﾄﾞ,ﾊﾞ,ﾋﾞ,ﾌﾞ,ﾍﾞ,ﾎﾞ,ﾊﾟ,ﾋﾟ,ﾌﾟ,ﾍﾟ,ﾎﾟ";
-            //    string strHalfKanaPart2 = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝｰｬｭｮｧｨｩｪｫｯﾞﾟ";
-            //    StringBuilder sb = new StringBuilder();
-            //    foreach (char charInput in str)
-            //    {
-            //        if (strFullKanaListPart1.Contains(charInput.ToString()))
-            //        {
-            //            int index = strFullKanaListPart1.IndexOf(charInput);
-            //            sb.Append(strHalfKanaPart2[index]);
-            //        }
-            //        else if (strFullKanaListPart2.Contains(charInput.ToString()))
-            //        {
-            //            string[] arrFullKaka = strFullKanaListPart2.Split(',');
-            //            string[] arrHalfKana = strHarfKanaPart1.Split(',');
-            //            int index = Array.IndexOf(arrFullKaka, charInput.ToString());
-            //            sb.Append(arrHalfKana[index]);
-            //        }
-            //        else
-            //        {
-            //            sb.Append(charInput);
-            //        }
-            //    }
-            //    return sb.ToString();
-            //}
         }
 }

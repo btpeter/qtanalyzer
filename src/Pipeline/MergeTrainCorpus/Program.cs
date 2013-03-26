@@ -15,7 +15,9 @@ namespace MergeTrainCorpus
                 Console.WriteLine("MergeTrainCorpus [Merged train corpus file name] [input file 1] [input file 2] ... [input file N]");
                 return;
             }
-            Dictionary<string, string> dict = new Dictionary<string, string>();
+
+            HashSet<string> setQuery = new HashSet<string>();
+            List<string> corpusList = new List<string>();
 
             //Merge multi-train corpus into one corpus.
             //If many train corpus contain the same query with different label result, the first one will be saved,
@@ -52,20 +54,23 @@ namespace MergeTrainCorpus
                         continue;
                     }
 
-                    if (dict.ContainsKey(items[0]) == false)
+                    int freq = int.Parse(items[1]);
+                    if (setQuery.Contains(items[0]) == false)
                     {
-                        dict.Add(items[0], items[2]);
+                        setQuery.Add(items[0]);
+
+                        int freqLog = (int)Math.Log((double)freq);
+                        if (freqLog == 0)
+                        {
+                            freqLog++;
+                        }
+                        for (int j = 0; j < freqLog; j++)
+                        {
+                            sw.WriteLine(items[2]);
+                        }
                     }
                 }
                 sr.Close();
-            }
-
-            foreach (KeyValuePair<string, string> pair in dict)
-            {
-                if (pair.Value != null)
-                {
-                    sw.WriteLine(pair.Value);
-                }
             }
             sw.Close();
         }

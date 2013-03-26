@@ -143,7 +143,7 @@ namespace QueryTermWeightAnalyzer
             return (double)(bigramFreq) / (double)(unigramFreq);
         }
 
-        public string GetTermRankTag(List<string> strTagList)
+        private string GetTermRankTag(List<string> strTagList)
         {
             foreach (string item in strTagList)
             {
@@ -155,7 +155,20 @@ namespace QueryTermWeightAnalyzer
             return null;
         }
 
-        public List<Token> LabelString(string strText)
+        private string GetTermRankOrderTag(List<string> strTagList)
+        {
+            foreach (string item in strTagList)
+            {
+                if (item == "=" || item == "<" || item == ">" || item == "E")
+                {
+                    return item;
+                }
+            }
+            return null;
+        }
+
+
+        private List<Token> LabelString(string strText)
         {
             List<Token> tknList = new List<Token>();
             wordseg.Segment(strText, wbTokens, bUseCRFModel);
@@ -172,6 +185,102 @@ namespace QueryTermWeightAnalyzer
             return tknList;
         }
 
+        private int LabelStringFromOrderModel(string strText, List<Token> tknList)
+        {
+            tknList.Clear();
+            wordseg.Segment(strText, wbTokens, bUseCRFModel);
+            int maxRank = 0;
+            int currentRank = 0;
+            for (int i = 0; i < wbTokens.tokenList.Count; i++)
+            {
+                Token tkn = new Token();
+                tkn.offset = wbTokens.tokenList[i].offset;
+                tkn.length = wbTokens.tokenList[i].len;
+                tkn.strTerm = wbTokens.tokenList[i].strTerm;
+                tkn.strTag = GetTermRankOrderTag(wbTokens.tokenList[i].strTagList);
+                if (tkn.strTag == ">")
+                {
+                    currentRank--;
+                }
+                else if (tkn.strTag == "<")
+                {
+                    currentRank++;
+                }
+
+                if (currentRank > maxRank)
+                {
+                    maxRank = currentRank;
+                }
+                tknList.Add(tkn);
+            }
+            if (tknList.Count == 0)
+            {
+                return 0;
+            }
+
+            currentRank = maxRank;
+            string strOrder = tknList[0].strTag;
+            int maxTagId = currentRank;
+            tknList[0].strTag = "RANK_" + currentRank.ToString();
+            for (int i = 1; i < tknList.Count; i++)
+            {
+                if (strOrder == ">")
+                {
+                    currentRank++;
+                }
+                else if (strOrder == "<")
+                {
+                    currentRank--;
+                }
+
+                strOrder = tknList[i].strTag;
+                tknList[i].strTag = "RANK_" + currentRank.ToString();
+
+                if (maxTagId < currentRank)
+                {
+                    maxTagId = currentRank;
+                }
+            }
+
+            return maxTagId;
+        }
+
+        //public List<Token> Analyze(string strText)
+        //{
+        //    List<Token> tknList = new List<Token>();
+        //    int maxTagId = LabelStringFromOrderModel(strText, tknList);
+        //    return tknList;
+        //}
+
+        //public List<Token> Analyze(string strText)
+        //{
+        //    List<Token> tknList = new List<Token>();
+        //    int maxTagId = LabelStringFromOrderModel(strText, tknList);
+        //    if (maxTagId < 2)
+        //    {
+        //        foreach (Token tkn in tknList)
+        //        {
+        //            tkn.strTag = "NORM";
+        //        }
+        //    }
+        //    else
+        //    {
+        //        string strOPTITag = "RANK_" + maxTagId.ToString();
+        //        foreach (Token tkn in tknList)
+        //        {
+        //            if (tkn.strTag == strOPTITag)
+        //            {
+        //                tkn.strTag = "RANKONLY";
+        //            }
+        //            else
+        //            {
+        //                tkn.strTag = "NORM";
+        //            }
+        //        }
+        //    }
+
+        //    return tknList;
+        //}
 
         public List<Token> Analyze(string strText)
         {
