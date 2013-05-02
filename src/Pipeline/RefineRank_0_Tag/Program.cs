@@ -18,43 +18,50 @@ namespace RefineRank_0_Tag
 
         public static List<TermTag> ParseTermTagList(string str)
         {
-            string[] items = str.Split();
-            List<TermTag> rstList = new List<TermTag>();
-
-            int pos = items[0].LastIndexOf('[');
-            string strTerm = items[0].Substring(0, pos);
-            string strTag = items[0].Substring(pos + 1, items[0].Length - pos - 2);
-
-            string strCurrentTerm = strTerm;
-            string strCurrentTag = strTag;
-            for (int i = 1; i < items.Length; i++)
+            try
             {
-                pos = items[i].LastIndexOf('[');
-                strTerm = items[i].Substring(0, pos);
-                strTag = items[i].Substring(pos + 1, items[i].Length - pos - 2);
+                string[] items = str.Split();
+                List<TermTag> rstList = new List<TermTag>();
 
-                if (strTag != strCurrentTag)
+                int pos = items[0].LastIndexOf('[');
+                string strTerm = items[0].Substring(0, pos);
+                string strTag = items[0].Substring(pos + 1, items[0].Length - pos - 2);
+
+                string strCurrentTerm = strTerm;
+                string strCurrentTag = strTag;
+                for (int i = 1; i < items.Length; i++)
+                {
+                    pos = items[i].LastIndexOf('[');
+                    strTerm = items[i].Substring(0, pos);
+                    strTag = items[i].Substring(pos + 1, items[i].Length - pos - 2);
+
+                    if (strTag != strCurrentTag)
+                    {
+                        TermTag tt = new TermTag();
+                        tt.strTerm = strCurrentTerm;
+                        tt.strTag = strCurrentTag;
+                        rstList.Add(tt);
+                        strCurrentTerm = "";
+                    }
+
+                    strCurrentTerm = strCurrentTerm + strTerm;
+                    strCurrentTag = strTag;
+                }
+
+                if (strCurrentTag.Length > 0)
                 {
                     TermTag tt = new TermTag();
                     tt.strTerm = strCurrentTerm;
                     tt.strTag = strCurrentTag;
                     rstList.Add(tt);
-                    strCurrentTerm = "";
                 }
 
-                strCurrentTerm = strCurrentTerm + strTerm;
-                strCurrentTag = strTag;
+                return rstList;
             }
-
-            if (strCurrentTag.Length > 0)
+            catch (System.Exception err)
             {
-                TermTag tt = new TermTag();
-                tt.strTerm = strCurrentTerm;
-                tt.strTag = strCurrentTag;
-                rstList.Add(tt);
+                return null;
             }
-
-            return rstList;
         }
 
 
@@ -92,11 +99,17 @@ namespace RefineRank_0_Tag
                 strTermScore = strTermScore.Trim();
 
                 List<TermTag> ttList = ParseTermTagList(strTermScore);
+                if (ttList == null)
+                {
+                    continue;
+                }
+
                 string strRst = "";
                 foreach (TermTag tt in ttList)
                 {
                     if (tt.strTerm.Length > 3 && tt.strTag == "1" && query2tags.ContainsKey(tt.strTerm) == true)
                     {
+                        //Found the term is in lexical dictionary, rewrite it
                         strRst = strRst + query2tags[tt.strTerm] + "\t";
                     }
                     else

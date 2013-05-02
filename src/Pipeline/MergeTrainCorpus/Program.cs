@@ -59,15 +59,15 @@ namespace MergeTrainCorpus
                     {
                         setQuery.Add(items[0]);
 
-                        int freqLog = (int)Math.Log((double)freq);
-                        if (freqLog == 0)
-                        {
-                            freqLog++;
-                        }
-                        for (int j = 0; j < freqLog; j++)
-                        {
+                        //int freqLog = (int)Math.Log((double)freq);
+                        //if (freqLog == 0)
+                        //{
+                        //    freqLog++;
+                        //}
+                        //for (int j = 0; j < freqLog; j++)
+                        //{
                             sw.WriteLine(items[2]);
-                        }
+                        //}
                     }
                 }
                 sr.Close();

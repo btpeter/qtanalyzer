@@ -76,7 +76,7 @@ namespace BuildQueryTermWeightCorpus
                 if (scoreList[i].bThreshold != scoreList[i - 1].bThreshold)
                 {
                     double sumGap = Math.Abs(scoreList[i].gap + scoreList[i - 1].gap);
-                    if (scoreList[i].gap / sumGap >= 0.05 && scoreList[i].gap / sumGap <= 0.95)
+                    if (scoreList[i].gap / sumGap >= 0.1 && scoreList[i].gap / sumGap <= 0.9)
                     {
                         return false;
                     }
@@ -280,7 +280,7 @@ namespace BuildQueryTermWeightCorpus
                         }
                     }
 
-                    if (maxWeight < 1.0 || coreTerm < 2)
+                    if (maxWeight < 1.0)
                     {
                         continue;
                     }
@@ -297,11 +297,6 @@ namespace BuildQueryTermWeightCorpus
                         scoreList.Add(scoreItem);
                     }
 
-                    //if (scoreList.Count != MAX_THRESHOLD_NUM + 1)
-                    //{
-                    //    continue;
-                    //}
-
                     //Find top-ThresholdNum threshold value
                     List<double> thresholdList = null;
                     thresholdList = CalcThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
@@ -316,7 +311,7 @@ namespace BuildQueryTermWeightCorpus
                     }
 
                     //If distribution of score in each threshold is diversity, ignore the query
-                    if (CheckThreshold(scoreList, thresholdList, 0.05) == false)
+                    if (CheckThreshold(scoreList, thresholdList, 0.1) == false)
                     {
                         continue;
                     }

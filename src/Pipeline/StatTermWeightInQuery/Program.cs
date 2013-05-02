@@ -29,7 +29,7 @@ namespace StatTermWeightInQuery
     class Program
     {
         public static int MIN_QUERY_URL_PAIR_FREQUENCY = 2;
-        public static int MIN_CLUSTER_FREQUENCY = 4;
+        public static int MIN_CLUSTER_SIZE = 2;
         public static BigDictionary<string, List<QueryItem>> query2Item = new BigDictionary<string, List<QueryItem>>();
         private static StreamWriter sw;
         public static Tokens tokens;
@@ -125,7 +125,7 @@ namespace StatTermWeightInQuery
             else
             {
                 MIN_QUERY_URL_PAIR_FREQUENCY = int.Parse(args[2]);
-                MIN_CLUSTER_FREQUENCY = int.Parse(args[3]);
+                MIN_CLUSTER_SIZE = int.Parse(args[3]);
                 InitializeWordBreaker(args[4]);
 
                 Console.WriteLine("Start to process...");
@@ -268,7 +268,6 @@ namespace StatTermWeightInQuery
         private static bool StatTermWeightInQuery(List<QueryItem> qiList)
         {
             List<QueryItem> tmp_qiList = new List<QueryItem>();
-            int totalFreq = 0;
             foreach (QueryItem item in qiList)
             {
                 wordseg.Segment(item.strQuery, tokens, false);
@@ -307,7 +306,6 @@ namespace StatTermWeightInQuery
                 {
                     item.tokenList = tknList;
                     tmp_qiList.Add(item);
-                    totalFreq += item.freq;
                 }
             }
 
@@ -317,6 +315,8 @@ namespace StatTermWeightInQuery
             for (int i = 0;i < tmp_qiList.Count;i++)
             {
                 Dictionary<Token, int> termHash2Freq = new Dictionary<Token, int>();
+                int totalFreq = tmp_qiList[i].freq;
+                int queryInCluster = 0;
                 foreach (Token item in tmp_qiList[i].tokenList)
                 {
                     termHash2Freq.Add(item, tmp_qiList[i].freq);
@@ -330,6 +330,8 @@ namespace StatTermWeightInQuery
                         List<Token> joinBList = new List<Token>();
                         if (AsubOfB(tmp_qiList[j].tokenList, tmp_qiList[i].tokenList, joinBList) == true)
                         {
+                            queryInCluster++;
+                            totalFreq += tmp_qiList[j].freq;
                             foreach (Token item in joinBList)
                             {
                                 termHash2Freq[item] += tmp_qiList[j].freq;
@@ -337,6 +339,8 @@ namespace StatTermWeightInQuery
                         }
                         else if (AsubOfB_2(tmp_qiList[i].tokenList, tmp_qiList[j].tokenList, joinBList) == true)
                         {
+                            queryInCluster++;
+                            totalFreq += tmp_qiList[j].freq;
                             foreach (Token item in joinBList)
                             {
                                 termHash2Freq[item] += tmp_qiList[j].freq;
@@ -345,29 +349,20 @@ namespace StatTermWeightInQuery
                     }
                 }
 
-
-                //Get term weight
-                int maxFreq = 0;
-                foreach (KeyValuePair<Token, int> pair in termHash2Freq)
-                {
-                    if (maxFreq < pair.Value)
-                    {
-                        maxFreq = pair.Value;
-                    }
-                }
-                if (maxFreq == totalFreq)
-                {
-                    bEntireCluster = true;
-                }
-
-                if (maxFreq < MIN_CLUSTER_FREQUENCY)
+                if (queryInCluster < MIN_CLUSTER_SIZE)
                 {
                     continue;
+                }
+
+                if (queryInCluster + 1 == tmp_qiList.Count && tmp_qiList[i].strQuery.Length >= 2)
+                {
+                    //All other queries are current query's sub or super set.
+                    bEntireCluster = true;
                 }
                 
                 foreach (Token item in tmp_qiList[i].tokenList)
                 {
-                    double fWeight = ((double)termHash2Freq[item]) / ((double)maxFreq);
+                    double fWeight = ((double)termHash2Freq[item]) / ((double)totalFreq);
                     item.fWeight = fWeight;
                 }
 
