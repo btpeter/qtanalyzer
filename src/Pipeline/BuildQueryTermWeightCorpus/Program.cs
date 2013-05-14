@@ -69,23 +69,6 @@ namespace BuildQueryTermWeightCorpus
             return rstList;
         }
 
-        static bool CheckScoreListQuality(List<ScoreItem> scoreList)
-        {
-            for (int i = 1; i < scoreList.Count; i++)
-            {
-                if (scoreList[i].bThreshold != scoreList[i - 1].bThreshold)
-                {
-                    double sumGap = Math.Abs(scoreList[i].gap + scoreList[i - 1].gap);
-                    if (scoreList[i].gap / sumGap >= 0.1 && scoreList[i].gap / sumGap <= 0.9)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return true;
-        }
-
         //Calculate threshold list
         //scoreList : all weight score in a query, the scores in the list must be sorted from big to small
         //thresholdCnt : the number of thresholds
@@ -154,43 +137,6 @@ namespace BuildQueryTermWeightCorpus
             }
 
             return thresholdList;
-        }
-
-        //The scores distribution
-        //For each scores range (from threshold[i] to threshold[i+1]), check the ratio between scores length and threshold length
-        static bool CheckThreshold(List<ScoreItem> scoreList, List<double> thresholdList, double maxGapRate)
-        {
-            double topThreshold = 1.0;
-            for (int i = 0; i < thresholdList.Count; i++)
-            {
-                double maxScore = 0.0;
-                double minScore = 1.0;
-                for (int j = 0; j < scoreList.Count; j++)
-                {
-                    if (scoreList[j].score <= topThreshold && scoreList[j].score > thresholdList[i])
-                    {
-                        if (maxScore < scoreList[j].score)
-                        {
-                            maxScore = scoreList[j].score;
-                        }
-                        if (minScore > scoreList[j].score)
-                        {
-                            minScore = scoreList[j].score;
-                        }
-                    }
-                }
-
-                if ((maxScore - minScore) / (topThreshold - thresholdList[i]) >= maxGapRate)
-                {
-                    return false;
-                }
-
-                topThreshold = thresholdList[i];
-            }
-
-            //last part is not necessary to test
-
-            return true;
         }
 
         static void Main(string[] args)
@@ -280,10 +226,10 @@ namespace BuildQueryTermWeightCorpus
                         }
                     }
 
-                    if (maxWeight < 1.0)
-                    {
-                        continue;
-                    }
+                    //if (maxWeight < 1.0)
+                    //{
+                    //    continue;
+                    //}
 
                     //Sort weight score list
                     List<ScoreItem> scoreList = new List<ScoreItem>();
@@ -301,17 +247,6 @@ namespace BuildQueryTermWeightCorpus
                     List<double> thresholdList = null;
                     thresholdList = CalcThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
                     if (thresholdList.Count != MAX_THRESHOLD_NUM)
-                    {
-                        continue;
-                    }
-
-                    if (CheckScoreListQuality(scoreList) == false)
-                    {
-                        continue;
-                    }
-
-                    //If distribution of score in each threshold is diversity, ignore the query
-                    if (CheckThreshold(scoreList, thresholdList, 0.1) == false)
                     {
                         continue;
                     }

@@ -148,7 +148,6 @@ namespace RefineRank_0_Tag
                             if (pos > 0)
                             {
                                 strTermScore = strTermScore + items[j] + "\t";
-
                                 double score = double.Parse(items[j].Trim().Substring(pos + 1, items[j].Trim().Length - pos - 2));
                                 if (score > maxScore)
                                 {

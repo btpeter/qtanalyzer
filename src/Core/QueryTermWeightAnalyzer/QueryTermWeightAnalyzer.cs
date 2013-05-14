@@ -10,22 +10,18 @@ namespace QueryTermWeightAnalyzer
     public class Token
     {
         public int offset;
-        public int length;
         public string strTerm;
-        public string strTag;
+        public int rankId;
     }
 
     public class QueryTermWeightAnalyzer
     {
         const string KEY_LEXICAL_DICT_FILE_NAME = "LexicalDictFileName";
         const string KEY_MODEL_FILE_NAME = "ModelFileName";
-        const string KEY_UNIGRAM_FILE_NAME = "UnigramFileName";
-        const string KEY_BIGRAM_FILE_NAME = "BigramFileName";
 
         WordSeg.WordSeg wordseg;
         WordSeg.Tokens wbTokens;
         bool bUseCRFModel = false;
-        Dictionary<string, int> unigram, bigram;
 
         private Dictionary<string, int> LoadNGram(string strFileName)
         {
@@ -70,9 +66,7 @@ namespace QueryTermWeightAnalyzer
                 items[1] = items[1].ToLower().Trim();
 
                 if (items[0] != KEY_LEXICAL_DICT_FILE_NAME.ToLower() &&
-                    items[0] != KEY_MODEL_FILE_NAME.ToLower() &&
-                    items[0] != KEY_UNIGRAM_FILE_NAME.ToLower() &&
-                    items[0] != KEY_BIGRAM_FILE_NAME.ToLower())
+                    items[0] != KEY_MODEL_FILE_NAME.ToLower())
                 {
                     throw new Exception("Invalidated configuration item");
 
@@ -101,47 +95,18 @@ namespace QueryTermWeightAnalyzer
             else
             {
                 bUseCRFModel = true;
-                wordseg.LoadModelFile(confDict[KEY_MODEL_FILE_NAME.ToLower()], null);
+                ModelFeatureGenerator featureGenerator = new ModelFeatureGenerator();
+                featureGenerator.Initialize(confDict[KEY_LEXICAL_DICT_FILE_NAME.ToLower()]);
+                wordseg.LoadModelFile(confDict[KEY_MODEL_FILE_NAME.ToLower()], featureGenerator);
             }
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
 
-            unigram = LoadNGram(confDict[KEY_UNIGRAM_FILE_NAME.ToLower()]);
-            bigram = LoadNGram(confDict[KEY_BIGRAM_FILE_NAME.ToLower()]);
             return true;
 
         }
 
-        private double LMProb(string term1, string term2)
-        {
-            string strBiTerm = term1 + " " + term2;
-            int bigramFreq;
-            int unigramFreq;
-            if (bigram.ContainsKey(strBiTerm) == false)
-            {
-                bigramFreq = 0;
-            }
-            else
-            {
-                bigramFreq = bigram[strBiTerm];
-            }
-
-            if (unigram.ContainsKey(term1) == false)
-            {
-                unigramFreq = 0;
-            }
-            else
-            {
-                unigramFreq = unigram[term1];
-            }
-
-            if (unigramFreq == 0)
-            {
-                return 0.0;
-            }
-
-            return (double)(bigramFreq) / (double)(unigramFreq);
-        }
+      
 
         private string GetTermRankTag(List<string> strTagList)
         {
@@ -155,18 +120,64 @@ namespace QueryTermWeightAnalyzer
             return null;
         }
 
-        private string GetTermRankOrderTag(List<string> strTagList)
+        private string ExtractCoreTerms(List<Token> tknList)
         {
-            foreach (string item in strTagList)
+            StringBuilder sb = new StringBuilder();
+            foreach (Token tkn in tknList)
             {
-                if (item == "=" || item == "<" || item == ">" || item == "E")
+                if (tkn.rankId < 2)
                 {
-                    return item;
+                    sb.Append(tkn.strTerm);
                 }
             }
-            return null;
+            return sb.ToString();
         }
 
+        private bool HasOptTerms(List<Token> tknList)
+        {
+            foreach (Token tkn in tknList)
+            {
+                if (tkn.rankId >= 2)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void NormalizeTermWeight(List<Token> tknList)
+        {
+            //Check the number of token with rank0, if there is no such token, 
+            //Adjust token's rank id
+            int rank0Cnt = 0, rank1Cnt = 1;
+            foreach (Token tkn in tknList)
+            {
+                if (tkn.rankId == 0)
+                {
+                    rank0Cnt++;
+                }
+                else if (tkn.rankId == 1)
+                {
+                    rank1Cnt++;
+                }
+            }
+            if (rank0Cnt == 0 && rank1Cnt == 0)
+            {
+                //If all token's term rank are rank2, rewrite them as rank0
+                foreach (Token tkn in tknList)
+                {
+                    tkn.rankId = 0;
+                }
+            }
+            else if (rank0Cnt == 0)
+            {
+                //If no token's term ran is rank0, increase all token's term rank level
+                foreach (Token tkn in tknList)
+                {
+                    tkn.rankId--;
+                }
+            }
+        }
 
         private List<Token> LabelString(string strText)
         {
@@ -176,198 +187,95 @@ namespace QueryTermWeightAnalyzer
             {
                 Token tkn = new Token();
                 tkn.offset = wbTokens.tokenList[i].offset;
-                tkn.length = wbTokens.tokenList[i].len;
                 tkn.strTerm = wbTokens.tokenList[i].strTerm;
-                tkn.strTag = GetTermRankTag(wbTokens.tokenList[i].strTagList);
+                string strTag = GetTermRankTag(wbTokens.tokenList[i].strTagList);
+                if (strTag == "RANK_0")
+                {
+                    tkn.rankId = 0;
+                }
+                else if (strTag == "RANK_1")
+                {
+                    tkn.rankId = 1;
+                }
+                else
+                {
+                    tkn.rankId = 2;
+                }
 
                 tknList.Add(tkn);
             }
             return tknList;
         }
 
-        private int LabelStringFromOrderModel(string strText, List<Token> tknList)
+        private bool MergeTermWeight(List<Token> subTknList, List<Token> tknList)
         {
-            tknList.Clear();
-            wordseg.Segment(strText, wbTokens, bUseCRFModel);
-            int maxRank = 0;
-            int currentRank = 0;
-            for (int i = 0; i < wbTokens.tokenList.Count; i++)
+            if (HasOptTerms(subTknList) == false)
             {
-                Token tkn = new Token();
-                tkn.offset = wbTokens.tokenList[i].offset;
-                tkn.length = wbTokens.tokenList[i].len;
-                tkn.strTerm = wbTokens.tokenList[i].strTerm;
-                tkn.strTag = GetTermRankOrderTag(wbTokens.tokenList[i].strTagList);
-                if (tkn.strTag == ">")
-                {
-                    currentRank--;
-                }
-                else if (tkn.strTag == "<")
-                {
-                    currentRank++;
-                }
-
-                if (currentRank > maxRank)
-                {
-                    maxRank = currentRank;
-                }
-                tknList.Add(tkn);
-            }
-            if (tknList.Count == 0)
-            {
-                return 0;
+                //No need to merge
+                return false;
             }
 
-            currentRank = maxRank;
-            string strOrder = tknList[0].strTag;
-            int maxTagId = currentRank;
-            tknList[0].strTag = "RANK_" + currentRank.ToString();
-            for (int i = 1; i < tknList.Count; i++)
+            //Check whether the token boundary between tknList and subTknList are the same.
+            //If not, do not merge them
+            int i = 0, j = 0;
+            while (j < tknList.Count)
             {
-                if (strOrder == ">")
+                if (tknList[j].rankId >= 2)
                 {
-                    currentRank++;
-                }
-                else if (strOrder == "<")
-                {
-                    currentRank--;
+                    j++;
+                    continue;
                 }
 
-                strOrder = tknList[i].strTag;
-                tknList[i].strTag = "RANK_" + currentRank.ToString();
-
-                if (maxTagId < currentRank)
+                if (tknList[j].strTerm != subTknList[i].strTerm)
                 {
-                    maxTagId = currentRank;
+                    return false;
                 }
+                i++;
+                j++;
             }
 
-            return maxTagId;
+            i = 0;
+            j = 0;
+            while (j < tknList.Count)
+            {
+                if (tknList[j].rankId >= 2)
+                {
+                    tknList[j].rankId++;
+                    j++;
+                    continue;
+                }
+
+                tknList[j].rankId = subTknList[i].rankId;
+                i++;
+                j++;
+            }
+
+            return true;
+
         }
-
-        //public List<Token> Analyze(string strText)
-        //{
-        //    List<Token> tknList = new List<Token>();
-        //    int maxTagId = LabelStringFromOrderModel(strText, tknList);
-        //    return tknList;
-        //}
-
-        //public List<Token> Analyze(string strText)
-        //{
-        //    List<Token> tknList = new List<Token>();
-        //    int maxTagId = LabelStringFromOrderModel(strText, tknList);
-        //    if (maxTagId < 2)
-        //    {
-        //        foreach (Token tkn in tknList)
-        //        {
-        //            tkn.strTag = "NORM";
-        //        }
-        //    }
-        //    else
-        //    {
-        //        string strOPTITag = "RANK_" + maxTagId.ToString();
-        //        foreach (Token tkn in tknList)
-        //        {
-        //            if (tkn.strTag == strOPTITag)
-        //            {
-        //                tkn.strTag = "RANKONLY";
-        //            }
-        //            else
-        //            {
-        //                tkn.strTag = "NORM";
-        //            }
-        //        }
-        //    }
-
-        //    return tknList;
-        //}
 
         public List<Token> Analyze(string strText)
         {
             List<Token> tknList = LabelString(strText);
+            NormalizeTermWeight(tknList);
 
-            int rank0Cnt = 0;
-            int rank1Cnt = 0;
-            int rank2Cnt = 0;
-            for (int i = 0; i < tknList.Count; i++)
+            if (HasOptTerms(tknList) == false)
             {
-                double probLeftTerm = 0.0, probRightTerm = 0.0;
-                string strLeftTermWeight = "", strRightTermWeight = "";
-
-                if (i > 0)
-                {
-                    probLeftTerm = LMProb(tknList[i].strTerm, tknList[i - 1].strTerm);
-                    strLeftTermWeight = tknList[i - 1].strTag;
-                }
-
-                if (i < tknList.Count - 1)
-                {
-                    probRightTerm = LMProb(tknList[i].strTerm, tknList[i + 1].strTerm);
-                    strRightTermWeight = tknList[i + 1].strTag;
-                }
-
-                if (probLeftTerm > probRightTerm)
-                {
-                    if (probLeftTerm > 0.8)
-                    {
-                        tknList[i].strTag = tknList[i].strTag + "|" + strLeftTermWeight;
-                    }
-                }
-                else
-                {
-                    if (probRightTerm > 0.8)
-                    {
-                        tknList[i].strTag = tknList[i].strTag + "|" + strRightTermWeight;
-                    }
-                }
-
-                if (tknList[i].strTag.Contains("RANK_0") == true)
-                {
-                    tknList[i].strTag = "RANK_0";
-                    rank0Cnt++;
-                }
-                else if (tknList[i].strTag.Contains("RANK_1") == true)
-                {
-                    tknList[i].strTag = "RANK_1";
-                    rank1Cnt++;
-                }
-                else
-                {
-                    tknList[i].strTag = "RANK_2";
-                    rank2Cnt++;
-                }
+                //No optional term, return directly
+                return tknList;
             }
 
-            if (rank0Cnt <= 1)
+            while (true)
             {
-                rank0Cnt = 0;
-                rank1Cnt = 0;
-                rank2Cnt = 0;
-                for (int i = 0; i < tknList.Count; i++)
-                {
-                    if (tknList[i].strTag == "RANK_1")
-                    {
-                        tknList[i].strTag = "RANK_0";
-                        rank0Cnt++;
-                    }
-                    else if (tknList[i].strTag == "RANK_2")
-                    {
-                        tknList[i].strTag = "RANK_1";
-                        rank1Cnt++;
-                    }
-                }
-            }
+                string strCoreTerms = ExtractCoreTerms(tknList);
+                List<Token> tmpTknList = LabelString(strCoreTerms);
+                NormalizeTermWeight(tmpTknList);
 
-            if (rank2Cnt >= rank0Cnt + rank1Cnt)
-            {
-                for (int i = 0; i < tknList.Count; i++)
+                if (MergeTermWeight(tmpTknList, tknList) == false)
                 {
-                    if (tknList[i].strTag == "RANK_2")
-                    {
-                        tknList[i].strTag = "RANK_1";
-                    }
+                    //If no new result need to be mereged into result, end the process
+                    break;
                 }
-
             }
 
             return tknList;
