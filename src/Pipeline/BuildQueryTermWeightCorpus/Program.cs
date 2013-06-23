@@ -226,11 +226,6 @@ namespace BuildQueryTermWeightCorpus
                         }
                     }
 
-                    //if (maxWeight < 1.0)
-                    //{
-                    //    continue;
-                    //}
-
                     //Sort weight score list
                     List<ScoreItem> scoreList = new List<ScoreItem>();
                     foreach (KeyValuePair<double, int> pair in sdict.Reverse())
@@ -332,8 +327,6 @@ namespace BuildQueryTermWeightCorpus
                 catch (Exception err)
                 {
                     Console.WriteLine("Invalidated sentence: {0}", strLine);
-                    Console.WriteLine("Message: {0}", err.Message);
-                    Console.WriteLine("Call stack: {0}", err.StackTrace);
                 }
             }
 

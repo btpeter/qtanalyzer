@@ -18,20 +18,25 @@ namespace QueryTermWeightAnalyzerConsole
             }
 
             QueryTermWeightAnalyzer.QueryTermWeightAnalyzer analyzer = new QueryTermWeightAnalyzer.QueryTermWeightAnalyzer();
-            analyzer.Initialize(args[0]);
+            if (analyzer.Initialize(args[0]) == false)
+            {
+                Console.WriteLine("Initialize the analyzer failed.");
+                return;
+            }
 
             StreamReader sr = new StreamReader(args[1]);
             StreamWriter sw = new StreamWriter(args[2]);
             while (sr.EndOfStream == false)
             {
                 string strLine = sr.ReadLine();
+
                 List<Token> tknList;
                 tknList = analyzer.Analyze(strLine);
 
                 string strOutput = "";
                 foreach (Token token in tknList)
                 {
-                    strOutput += token.strTerm + "[RANK_" + token.rankId.ToString() + "] ";
+                    strOutput += token.strTerm + "[RANK_" + token.rankId.ToString() + ", "+ token.rankingscore.ToString() +"] ";
                 }
                 sw.WriteLine(strOutput.Trim());
             }

@@ -24,6 +24,20 @@ namespace QueryTermWeightAnalyzer
             return strFeatureList;
         }
 
+        public List<List<string>> GenerateFeature(List<string> termList)
+        {
+            List<List<string>> strFeatureList = new List<List<string>>();
+            foreach (string term in termList)
+            {
+                List<string> strList = new List<string>();
+                strList.Add(term);
+                strFeatureList.Add(strList);
+            }
+
+            return strFeatureList;
+        }
+
+
         public bool Initialize()
         {
             throw new NotImplementedException();

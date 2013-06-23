@@ -71,8 +71,7 @@ namespace ClusterUrl
                 string[] items = strLine.Split('\t');
 
                 string strQuery = items[0].ToLower().Trim();
-                strQuery = ToDBC(strQuery);
-                strQuery = strQuery.ToLower().Trim().Replace(" ", "").Replace("　", "");
+                strQuery = ToDBC(strQuery).ToLower().Trim();
 
                 items[1] = items[1].ToLower().Trim();
 

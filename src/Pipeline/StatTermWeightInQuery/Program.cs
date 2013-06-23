@@ -101,11 +101,12 @@ namespace StatTermWeightInQuery
         {
             foreach (QueryItem item in qiList)
             {
-                if (query2Item.ContainsKey(item.strQuery) == false)
+                string strQuery = item.strQuery.Replace(" ", "").ToLower().Trim();
+                if (query2Item.ContainsKey(strQuery) == false)
                 {
-                    query2Item.Add(item.strQuery, new List<QueryItem>());
+                    query2Item.Add(strQuery, new List<QueryItem>());
                 }
-                query2Item[item.strQuery].Add(item);
+                query2Item[strQuery].Add(item);
             }
         }
 
@@ -121,68 +122,72 @@ namespace StatTermWeightInQuery
             if (args.Length != 5)
             {
                 Console.WriteLine("StatTermWeightInQuery [Query_ClusterId_Freq FileName] [Query_Term_Weight FileName] [Min Query_ClusterId Frequency] [Min Cluster Frequency] [Word Breaker Lex Dictionary]");
+                return;
             }
-            else
+            MIN_QUERY_URL_PAIR_FREQUENCY = int.Parse(args[2]);
+            MIN_CLUSTER_SIZE = int.Parse(args[3]);
+            InitializeWordBreaker(args[4]);
+
+            Console.WriteLine("Start to process...");
+            StreamReader reader = new StreamReader(args[0]);
+            sw = new StreamWriter(args[1], false, Encoding.UTF8);
+
+            string lastUrl = "";
+            long recordCnt = 0;
+            List<QueryItem> qiList = new List<QueryItem>();
+            string strLine = null;
+            while ((strLine = reader.ReadLine()) != null)
             {
-                MIN_QUERY_URL_PAIR_FREQUENCY = int.Parse(args[2]);
-                MIN_CLUSTER_SIZE = int.Parse(args[3]);
-                InitializeWordBreaker(args[4]);
-
-                Console.WriteLine("Start to process...");
-                StreamReader reader = new StreamReader(args[0]);
-                sw = new StreamWriter(args[1], false, Encoding.UTF8);
-
-                string lastUrl = "";
-                long recordCnt = 0;
-                List<QueryItem> qiList = new List<QueryItem>();
-                string strLine = null;
-                while ((strLine = reader.ReadLine()) != null)
+                strLine = strLine.ToLower().Trim();
+                string[] strArray = strLine.Split(new char[] { '\t' });
+                if (strArray.Length != 3)
                 {
-                    string[] strArray = strLine.Split(new char[] { '\t' });
+                    Console.WriteLine("Invalidated line: {0}", strLine);
+                    continue;
+                }
 
-                    recordCnt++;
-                    if (recordCnt % 100000 == 0)
-                    {
-                        Console.WriteLine("{0} Query-Url pair has been processed.", recordCnt);
-                    }
+                recordCnt++;
+                if (recordCnt % 100000 == 0)
+                {
+                    Console.WriteLine("{0} Query-Url pair has been processed.", recordCnt);
+                }
 
-                    QueryItem item = new QueryItem
+                QueryItem item = new QueryItem
+                {
+                    strQuery = strArray[0],
+                    freq = int.Parse(strArray[2])
+                };
+                if (item.freq >= MIN_QUERY_URL_PAIR_FREQUENCY)
+                {
+                    string strUrl = strArray[1];
+                    if ((lastUrl.Length > 0) && (strUrl != lastUrl))
                     {
-                        strQuery = strArray[0].Replace(" ", ""),
-                        freq = int.Parse(strArray[2])
-                    };
-                    if (item.freq >= MIN_QUERY_URL_PAIR_FREQUENCY)
-                    {
-                        string strUrl = strArray[1];
-                        if ((lastUrl.Length > 0) && (strUrl != lastUrl))
+                        if (qiList.Count >= 2)
                         {
-                            if (qiList.Count >= 2)
+                            //Statistics terms weight in each query-url cluster
+                            if (StatTermWeightInQuery(qiList) == true)
                             {
-                                //Statistics terms weight in each query-url cluster
-                                if (StatTermWeightInQuery(qiList) == true)
-                                {
-                                    AddQueryList(qiList);
-                                }
+                                AddQueryList(qiList);
                             }
-                            qiList = new List<QueryItem>();
                         }
-                        qiList.Add(item);
-                        lastUrl = strUrl;
+                        qiList = new List<QueryItem>();
                     }
+                    qiList.Add(item);
+                    lastUrl = strUrl;
                 }
-                if (qiList.Count >= 2)
-                {
-                    if (StatTermWeightInQuery(qiList) == true)
-                    {
-                        AddQueryList(qiList);
-                    }
-                }
-
-                Console.WriteLine("Merging clusters...");
-                MergeQueryWeight();
-                reader.Close();
-                sw.Close();
             }
+            if (qiList.Count >= 2)
+            {
+                if (StatTermWeightInQuery(qiList) == true)
+                {
+                    AddQueryList(qiList);
+                }
+            }
+
+            Console.WriteLine("Merging clusters...");
+            MergeQueryWeight();
+            reader.Close();
+            sw.Close();
         }
 
         //A query may have relationship with more than one clicked-url. So it is necessary to
@@ -190,6 +195,7 @@ namespace StatTermWeightInQuery
         //into a(query, term weight).
         public static void MergeQueryWeight()
         {
+            StreamWriter sw_log = new StreamWriter("log.txt");
             foreach (KeyValuePair<string, List<QueryItem>> pair in query2Item)
             {
                 if (pair.Value.Count != 0)
@@ -201,6 +207,7 @@ namespace StatTermWeightInQuery
                         continue;
                     }
 
+                    //Calcuate query's total clicked freq in sum
                     int iTotalFreq = 0;
                     foreach (QueryItem item in pair.Value)
                     {
@@ -214,6 +221,7 @@ namespace StatTermWeightInQuery
                         }
                     }
 
+                    //Initialize query's token list
                     QueryItem rstQueryItem = new QueryItem();
                     rstQueryItem.tokenList = new List<Token>();
                     for (int i = 0; i < pair.Value[0].tokenList.Count; i++)
@@ -240,6 +248,22 @@ namespace StatTermWeightInQuery
                             {
                                 Console.WriteLine("Query with different clicked url is inconsistent");
                                 bIgnore = true;
+
+                                foreach (QueryItem qi in pair.Value)
+                                {
+                                    sw_log.WriteLine(qi.strQuery);
+                                    StringBuilder sb = new StringBuilder();
+                                    foreach (Token tkn in qi.tokenList)
+                                    {
+                                        sb.Append(tkn.strTerm);
+                                        sb.Append(" ");
+                                    }
+                                    sw_log.WriteLine(sb.ToString().Trim());
+                                }
+                                sw_log.WriteLine();
+
+
+
                                 break;
                             }
                             rstQueryItem.tokenList[i].fWeight += (((double)pair.Value[j].freq) / ((double)iTotalFreq)) * pair.Value[j].tokenList[i].fWeight;
@@ -263,6 +287,7 @@ namespace StatTermWeightInQuery
                     sw.WriteLine(strOutput);
                 }
             }
+            sw_log.Close();
         }
 
         private static bool StatTermWeightInQuery(List<QueryItem> qiList)
@@ -276,13 +301,14 @@ namespace StatTermWeightInQuery
                 for (int i = 0;i < tokens.tokenList.Count;i++)
                 {
                     WordSeg.Token wbTkn = tokens.tokenList[i];
-                    if (wbTkn.strTerm.Length > 0)
+                    if (wbTkn.strTerm.Trim().Length > 0)
                     {
-                        //ignore null string
+                        //ignore empty string
                         Token token = new Token();
                         token.strTerm = wbTkn.strTerm;
 
                         //check duplicate terms in a query
+                        //If duplicated terms is found, drop current query
                         for (int j = 0; j < tknList.Count; j++)
                         {
                             if (tknList[j].strTerm == token.strTerm)

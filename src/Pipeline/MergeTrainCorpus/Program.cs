@@ -30,44 +30,22 @@ namespace MergeTrainCorpus
                 {
                     string strLine = sr.ReadLine();
                     string[] items = strLine.Split('\t');
-
                     items[0] = items[0].Trim();
-                    if (items[0].EndsWith("英文") == true ||
-                        items[0].EndsWith("英语怎么说") == true ||
-                        items[0].EndsWith("英语怎么读") == true ||
-                        items[0].EndsWith("英语是什么") == true ||
-                        items[0].EndsWith("英文怎么说") == true ||
-                        items[0].EndsWith("英文是什么") == true ||
-                        items[0].EndsWith("英文怎么读") == true ||
-                        items[0].EndsWith("英文怎么写") == true ||
-                        items[0].EndsWith("英语") == true ||
-                        items[0].EndsWith("英文翻译") == true ||
-                        items[0].EndsWith("英文单词") == true ||
-                        items[0].EndsWith("英语翻译") == true ||
-                        items[0].EndsWith("英语单词") == true ||
-                        items[0].EndsWith("翻译英文") == true ||
-                        items[0].EndsWith("翻译英语") == true ||
-                        items[0].EndsWith("怎么翻译") == true ||
-                        items[0].EndsWith("怎样翻译") == true ||
-                        items[0].EndsWith("如何翻译") == true)
-                    {
-                        continue;
-                    }
 
                     int freq = int.Parse(items[1]);
                     if (setQuery.Contains(items[0]) == false)
                     {
                         setQuery.Add(items[0]);
 
-                        //int freqLog = (int)Math.Log((double)freq);
-                        //if (freqLog == 0)
-                        //{
-                        //    freqLog++;
-                        //}
-                        //for (int j = 0; j < freqLog; j++)
-                        //{
+                        int freqLog = (int)Math.Log((double)freq);
+                        if (freqLog == 0)
+                        {
+                            freqLog++;
+                        }
+                        for (int j = 0; j < freqLog; j++)
+                        {
                             sw.WriteLine(items[2]);
-                        //}
+                        }
                     }
                 }
                 sr.Close();

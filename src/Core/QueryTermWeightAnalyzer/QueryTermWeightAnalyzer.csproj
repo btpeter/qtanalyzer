@@ -31,9 +31,20 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AdvUtils, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\dll\AdvUtils.dll</HintPath>
+    </Reference>
     <Reference Include="CRFSharp, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\dll\CRFSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="CRFSharpWrapper, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\dll\CRFSharpWrapper.dll</HintPath>
+    </Reference>
+    <Reference Include="Model">
+      <HintPath>..\..\dll\Model.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -48,6 +59,25 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Features\BigramInLeftFeature.cs" />
+    <Compile Include="Features\BigramInRightFeature.cs" />
+    <Compile Include="Features\FeatureContext.cs" />
+    <Compile Include="Features\IFeature.cs" />
+    <Compile Include="Features\IsBeginTermFeature.cs" />
+    <Compile Include="Features\IsEndTermFeature.cs" />
+    <Compile Include="Features\IsPunctFeature.cs" />
+    <Compile Include="Features\PMIInLeftFeature.cs" />
+    <Compile Include="Features\PMIInRightFeature.cs" />
+    <Compile Include="Features\TermLengthFeature.cs" />
+    <Compile Include="Features\TermOffsetFeature.cs" />
+    <Compile Include="Features\TermRank0PercentFeature.cs" />
+    <Compile Include="Features\TermRank1PercentFeature.cs" />
+    <Compile Include="Features\TermRank2PercentFeature.cs" />
+    <Compile Include="Features\TermRank3PercentFeature.cs" />
+    <Compile Include="Features\TermRank4PercentFeature.cs" />
+    <Compile Include="Features\UnigramIDFFeature.cs" />
+    <Compile Include="Features\UnigramTFFeature.cs" />
+    <Compile Include="Features\WordFormationFeature.cs" />
     <Compile Include="ModelFeatureGenerator.cs" />
     <Compile Include="QueryTermWeightAnalyzer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
