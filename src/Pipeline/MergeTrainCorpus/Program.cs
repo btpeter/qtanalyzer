@@ -10,9 +10,9 @@ namespace MergeTrainCorpus
     {
         static void Main(string[] args)
         {
-            if (args.Length < 2)
+            if (args.Length < 3)
             {
-                Console.WriteLine("MergeTrainCorpus [Merged train corpus file name] [input file 1] [input file 2] ... [input file N]");
+                Console.WriteLine("MergeTrainCorpus [IsWeight] [Merged train corpus file name] [input file 1] [input file 2] ... [input file N]");
                 return;
             }
 
@@ -22,8 +22,9 @@ namespace MergeTrainCorpus
             //Merge multi-train corpus into one corpus.
             //If many train corpus contain the same query with different label result, the first one will be saved,
             //and others will be dropped.
-            StreamWriter sw = new StreamWriter(args[0]);
-            for (int i = 1; i < args.Length; i++)
+            bool bWeight = bool.Parse(args[0]);
+            StreamWriter sw = new StreamWriter(args[1]);
+            for (int i = 2; i < args.Length; i++)
             {
                 StreamReader sr = new StreamReader(args[i]);
                 while (sr.EndOfStream == false)
@@ -37,12 +38,19 @@ namespace MergeTrainCorpus
                     {
                         setQuery.Add(items[0]);
 
-                        int freqLog = (int)Math.Log((double)freq);
-                        if (freqLog == 0)
+                        if (bWeight == true)
                         {
-                            freqLog++;
+                            int freqLog = (int)Math.Log((double)freq);
+                            if (freqLog == 0)
+                            {
+                                freqLog++;
+                            }
+                            for (int j = 0; j < freqLog; j++)
+                            {
+                                sw.WriteLine(items[2]);
+                            }
                         }
-                        for (int j = 0; j < freqLog; j++)
+                        else
                         {
                             sw.WriteLine(items[2]);
                         }

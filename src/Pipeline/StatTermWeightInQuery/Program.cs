@@ -26,11 +26,25 @@ namespace StatTermWeightInQuery
         }
     }
 
+    class QueryDict : IComparable<QueryDict>
+    {
+        public string strQuery;
+        public QueryItem qi;
+
+        public int CompareTo(QueryDict other)
+        {
+            return String.Compare(strQuery, other.strQuery);
+        }
+    }
+
     class Program
     {
         public static int MIN_QUERY_URL_PAIR_FREQUENCY = 2;
         public static int MIN_CLUSTER_SIZE = 2;
-        public static BigDictionary<string, List<QueryItem>> query2Item = new BigDictionary<string, List<QueryItem>>();
+        //public static BigDictionary<string, List<QueryItem>> query2Item = new BigDictionary<string, List<QueryItem>>();
+        public static VarBigArray<QueryDict> queryDict = new VarBigArray<QueryDict>(1024000);
+        public static long queryDictIdx = 0;
+
         private static StreamWriter sw;
         public static Tokens tokens;
         public static WordSeg.WordSeg wordseg;
@@ -97,18 +111,32 @@ namespace StatTermWeightInQuery
             return true;
         }
 
+        //public static void AddQueryList(List<QueryItem> qiList)
+        //{
+        //    foreach (QueryItem item in qiList)
+        //    {
+        //        string strQuery = item.strQuery.Replace(" ", "").ToLower().Trim();
+        //        if (query2Item.ContainsKey(strQuery) == false)
+        //        {
+        //            query2Item.Add(strQuery, new List<QueryItem>());
+        //        }
+        //        query2Item[strQuery].Add(item);
+        //    }
+        //}
+
         public static void AddQueryList(List<QueryItem> qiList)
         {
             foreach (QueryItem item in qiList)
             {
                 string strQuery = item.strQuery.Replace(" ", "").ToLower().Trim();
-                if (query2Item.ContainsKey(strQuery) == false)
-                {
-                    query2Item.Add(strQuery, new List<QueryItem>());
-                }
-                query2Item[strQuery].Add(item);
+                QueryDict qd = new QueryDict();
+                qd.strQuery = strQuery;
+                qd.qi = item;
+                queryDict[queryDictIdx] = qd;
+                queryDictIdx++;
             }
         }
+
 
         private static void InitializeWordBreaker(string strLexicalDictionary)
         {
@@ -190,104 +218,106 @@ namespace StatTermWeightInQuery
             sw.Close();
         }
 
+        private static QueryItem MergeOneQuery(List<QueryItem> qiList)
+        {
+            //Calcuate query's total clicked freq in sum
+            int iTotalFreq = 0;
+            foreach (QueryItem item in qiList)
+            {
+                iTotalFreq += item.freq;
+            }
+
+            //Initialize query's token list
+            QueryItem rstQueryItem = new QueryItem();
+            rstQueryItem.tokenList = new List<Token>();
+            for (int i = 0; i < qiList[0].tokenList.Count; i++)
+            {
+                Token tkn = new Token();
+                tkn.strTerm = qiList[0].tokenList[i].strTerm;
+                tkn.fWeight = 0.0;
+
+                rstQueryItem.tokenList.Add(tkn);
+            }
+
+            bool bIgnore = false;
+            for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
+            {
+                for (int j = 0; j < qiList.Count; j++)
+                {
+                    if (rstQueryItem.tokenList[i].strTerm != qiList[j].tokenList[i].strTerm)
+                    {
+                        Console.WriteLine("Query with different clicked url is inconsistent");
+                        bIgnore = true;
+
+                        break;
+                    }
+                    rstQueryItem.tokenList[i].fWeight += (((double)qiList[j].freq) / ((double)iTotalFreq)) * qiList[j].tokenList[i].fWeight;
+                }
+
+                if (bIgnore == true)
+                {
+                    break;
+                }
+            }
+
+            return rstQueryItem;
+        }
+
+
         //A query may have relationship with more than one clicked-url. So it is necessary to
         //merge (query, clicked-url1, term weights1), (query, clicked-url2, term weights2) ... (query, clicked-urlN, term weightN) 
         //into a(query, term weight).
         public static void MergeQueryWeight()
         {
-            StreamWriter sw_log = new StreamWriter("log.txt");
-            foreach (KeyValuePair<string, List<QueryItem>> pair in query2Item)
+            Console.WriteLine("Sorting query dictionary...");
+            queryDict.Sort(0, queryDictIdx);
+            List<QueryItem> qiList = new List<QueryItem>();
+
+            string strQuery = queryDict[0].strQuery;
+            qiList.Add(queryDict[0].qi);
+            for (long k = 1; k < queryDictIdx; k++)
             {
-                if (pair.Value.Count != 0)
+                if (strQuery != queryDict[k].strQuery)
                 {
-                    if (pair.Value[0].tokenList == null)
-                    {
-                        //This query is invlidated, ignore it.
-                        Console.WriteLine("Invalidated Query Item at index 0");
-                        continue;
-                    }
+                    //Merge result
+                    QueryItem rstQueryItem = MergeOneQuery(qiList);
 
                     //Calcuate query's total clicked freq in sum
                     int iTotalFreq = 0;
-                    foreach (QueryItem item in pair.Value)
+                    foreach (QueryItem item in qiList)
                     {
-                        if (item.tokenList != null)
-                        {
-                            iTotalFreq += item.freq;
-                        }
-                        else
-                        {
-                            Console.WriteLine("Invalidated Query Item");
-                        }
+                        iTotalFreq += item.freq;
                     }
-
-                    //Initialize query's token list
-                    QueryItem rstQueryItem = new QueryItem();
-                    rstQueryItem.tokenList = new List<Token>();
-                    for (int i = 0; i < pair.Value[0].tokenList.Count; i++)
-                    {
-                        Token tkn = new Token();
-                        tkn.strTerm = pair.Value[0].tokenList[i].strTerm;
-                        tkn.fWeight = 0.0;
-
-                        rstQueryItem.tokenList.Add(tkn);
-                    }
-
-                    bool bIgnore = false;
-                    for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
-                    {
-                        for (int j = 0; j < pair.Value.Count; j++)
-                        {
-                            if (pair.Value[j].tokenList == null)
-                            {
-                                Console.WriteLine("Invalidated Query Item");
-                                continue;
-                            }
-
-                            if (rstQueryItem.tokenList[i].strTerm != pair.Value[j].tokenList[i].strTerm)
-                            {
-                                Console.WriteLine("Query with different clicked url is inconsistent");
-                                bIgnore = true;
-
-                                foreach (QueryItem qi in pair.Value)
-                                {
-                                    sw_log.WriteLine(qi.strQuery);
-                                    StringBuilder sb = new StringBuilder();
-                                    foreach (Token tkn in qi.tokenList)
-                                    {
-                                        sb.Append(tkn.strTerm);
-                                        sb.Append(" ");
-                                    }
-                                    sw_log.WriteLine(sb.ToString().Trim());
-                                }
-                                sw_log.WriteLine();
-
-
-
-                                break;
-                            }
-                            rstQueryItem.tokenList[i].fWeight += (((double)pair.Value[j].freq) / ((double)iTotalFreq)) * pair.Value[j].tokenList[i].fWeight;
-                        }
-
-                        if (bIgnore == true)
-                        {
-                            break;
-                        }
-                    }
-                    if (bIgnore == true)
-                    {
-                        continue;
-                    }
-
-                    string strOutput = pair.Key + "\t" + iTotalFreq.ToString() + "\t";
+                    string strOutput = strQuery + "\t" + iTotalFreq.ToString() + "\t";
                     for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
                     {
                         strOutput = strOutput + rstQueryItem.tokenList[i].strTerm + "[" + rstQueryItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
                     }
                     sw.WriteLine(strOutput);
                 }
+
+                qiList.Clear();
+                strQuery = queryDict[k].strQuery;
+                qiList.Add(queryDict[k].qi);
             }
-            sw_log.Close();
+
+            if (qiList.Count > 0)
+            {
+                //Merge result
+                QueryItem rstQueryItem = MergeOneQuery(qiList);
+                //Calcuate query's total clicked freq in sum
+                int iTotalFreq = 0;
+                foreach (QueryItem item in qiList)
+                {
+                    iTotalFreq += item.freq;
+                }
+                string strOutput = strQuery + "\t" + iTotalFreq.ToString() + "\t";
+                for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
+                {
+                    strOutput = strOutput + rstQueryItem.tokenList[i].strTerm + "[" + rstQueryItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
+                }
+                sw.WriteLine(strOutput);
+            }
         }
 
         private static bool StatTermWeightInQuery(List<QueryItem> qiList)

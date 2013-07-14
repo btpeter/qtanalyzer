@@ -17,6 +17,18 @@ namespace QueryTermWeightAnalyzerConsole
                 return;
             }
 
+            if (File.Exists(args[0]) == false)
+            {
+                Console.WriteLine("Configuration file is not existed: {0}", args[0]);
+                return;
+            }
+
+            if (File.Exists(args[1]) == false)
+            {
+                Console.WriteLine("Input file is not existed: {0}", args[1]);
+                return;
+            }
+
             QueryTermWeightAnalyzer.QueryTermWeightAnalyzer analyzer = new QueryTermWeightAnalyzer.QueryTermWeightAnalyzer();
             if (analyzer.Initialize(args[0]) == false)
             {
@@ -32,11 +44,17 @@ namespace QueryTermWeightAnalyzerConsole
 
                 List<Token> tknList;
                 tknList = analyzer.Analyze(strLine);
+                if (tknList == null)
+                {
+                    //Analyze term weight is failed.
+                    Console.WriteLine("Failed to analyze {0}", strLine);
+                    continue;
+                }
 
                 string strOutput = "";
                 foreach (Token token in tknList)
                 {
-                    strOutput += token.strTerm + "[RANK_" + token.rankId.ToString() + ", "+ token.rankingscore.ToString() +"] ";
+                    strOutput += token.strTerm + "[RANK_" + token.rankId.ToString() + ", "+ token.rankingscore.ToString("0.00") +"] ";
                 }
                 sw.WriteLine(strOutput.Trim());
             }

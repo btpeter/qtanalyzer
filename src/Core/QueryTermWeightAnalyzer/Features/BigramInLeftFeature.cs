@@ -19,9 +19,10 @@ namespace QueryTermWeightAnalyzer.Features
                 string strTerm1 = context.tknList[context.index - 1].strTerm;
                 string strTerm2 = context.tknList[context.index].strTerm;
                 string strBigram = strTerm1 + " " + strTerm2;
-                if (context.bigramDict.ContainsKey(strBigram) == true)
+                int idx = context.bigram_da.SearchByPerfectMatch(strBigram);
+                if (idx >= 0)
                 {
-                    return context.bigramDict[strBigram].freq.ToString();
+                    return context.bigramList[idx].freq.ToString();
                 }
             }
             return "0";

@@ -15,9 +15,10 @@ namespace QueryTermWeightAnalyzer.Features
         public string GetValue(FeatureContext context)
         {
             string strTerm = context.tknList[context.index].strTerm;
-            if (context.unigramDict.ContainsKey(strTerm) == true)
+            int idx = context.unigram_da.SearchByPerfectMatch(strTerm);
+            if (idx >= 0)
             {
-                return context.unigramDict[strTerm].pRank3.ToString();
+                return context.unigramList[idx].pRank3.ToString();
             }
 
             return "0";

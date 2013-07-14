@@ -10,8 +10,10 @@ namespace QueryTermWeightAnalyzer.Features
     {
         public int index;
         public List<Token> tknList;
-        public BigDictionary<string, Unigram> unigramDict;
-        public BigDictionary<string, Bigram> bigramDict;
+        public DoubleArrayTrieSearch unigram_da;
+        public DoubleArrayTrieSearch bigram_da;
+        public List<Unigram> unigramList;
+        public List<Bigram> bigramList;
         public HashSet<string> setPunct;
         public double maxIDF;
     }

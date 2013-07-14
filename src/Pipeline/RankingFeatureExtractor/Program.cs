@@ -43,11 +43,12 @@ namespace RankingFeatureExtractor
             StreamWriter sw_train = new StreamWriter(args[2] + ".train");
             StreamWriter sw_test = new StreamWriter(args[2] + ".test");
             int maxSize = int.Parse(args[3]);
-            StreamWriter sw_log = new StreamWriter("FailedFtrExtract.log");
 
+            //Write column header into file (include feature set name)
             sw_train.WriteLine("m:Rating\tm:QueryId\tTerm\tQuery\t" + analyzer.GetFeatureName());
             sw_test.WriteLine("m:Rating\tm:QueryId\tTerm\tQuery\t" + analyzer.GetFeatureName());
 
+            //Write all active feature name into file
             string strAF = analyzer.GetFeatureName();
             string[] afitems = strAF.Split('\t');
             File.WriteAllLines("activefeatures.txt", afitems);
@@ -63,6 +64,8 @@ namespace RankingFeatureExtractor
                     continue;
                 }
                 setLine.Add(strLine);
+
+                //Parse training corpus
                 string[] items = strLine.Split();
                 List<string> termList = new List<string>();
                 List<string> tagList = new List<string>();
@@ -79,15 +82,20 @@ namespace RankingFeatureExtractor
                     sbQuery.Append(strTerm);
                 }
 
+                //Extract each term's features
                 List<string> featureList = analyzer.ExtractFeature(termList);
-                if (featureList.Count != termList.Count)
+                if (featureList == null || featureList.Count != termList.Count)
                 {
-                    throw new Exception("Invalidated feature set");
+                    //Failed to analyze term weight
+                    Console.WriteLine("Failed to analyze {0}", strLine);
+                    continue;
                 }
 
                 //Format: m:Rating\tm:QueryId\tTerm\tQuery\tFeatureSet
                 for (int i = 0; i < featureList.Count; i++)
                 {
+                    //The [0, maxSize] queries are for training corpus
+                    //The [maxSize + 1, maxSize * 2] queries are for test corpus
                     if (cnt <= maxSize)
                     {
                         sw_train.WriteLine("{0}\t{1}\t{2}\t{3}\t{4}", tagList[i], g_id, termList[i], sbQuery.ToString().Trim(), featureList[i]);
@@ -109,7 +117,6 @@ namespace RankingFeatureExtractor
             sr.Close();
             sw_train.Close();
             sw_test.Close();
-            sw_log.Close();
         }
     }
 }

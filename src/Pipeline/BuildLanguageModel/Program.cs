@@ -95,17 +95,29 @@ namespace BuildLanguageModel
             //Save unigram data
             string strUnigramFileName = args[2] + ".uni";
             StreamWriter sw_unigramData = new StreamWriter(strUnigramFileName, false, Encoding.UTF8, 102400);
+       
+            //Build double array trie-tree key and value pairs
+            SortedDictionary<string, int> unigramDict_da = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            int da_unigram_cnt = 0;
             foreach (KeyValuePair<string, int> pair in unigram)
             {
                 if (unigramDF[pair.Key] > 1)
                 {
                     double idf = (double)docCnt / (double)(unigramDF[pair.Key]);
                     idf = Math.Log(idf, 2.0);
-                    sw_unigramData.WriteLine("{0}\t{1}\t{2}", pair.Key, pair.Value, idf);
+                    sw_unigramData.WriteLine("{0}\t{1}", pair.Value, idf);
+                    unigramDict_da.Add(pair.Key, da_unigram_cnt);
+                    da_unigram_cnt++;
                 }
             }
             sw_unigramData.Close();
 
+            DoubleArrayTrieBuilder da_unigram = new DoubleArrayTrieBuilder(4);
+            da_unigram.build(unigramDict_da);
+            da_unigram.save(strUnigramFileName + ".da");
+
+
+            //Calculate MI
             BigDictionary<string, double> miDict = new BigDictionary<string, double>();
             double minMI = 10000000.0;
             foreach (KeyValuePair<string, int> pair in bigram)
@@ -141,8 +153,11 @@ namespace BuildLanguageModel
                 miDict.Add(pair.Key, mi);
             }
 
+            //Save bigram data
             string strBigramFileName = args[2] + ".bi";
             StreamWriter sw_bigramData = new StreamWriter(strBigramFileName, false, Encoding.UTF8, 102400);
+            SortedDictionary<string, int> bigramDict_da = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            int da_bigram_cnt = 0;
             foreach (KeyValuePair<string, int> pair in bigram)
             {
                 if (pair.Value > 2)
@@ -152,10 +167,18 @@ namespace BuildLanguageModel
                     {
                         mi = miDict[pair.Key];
                     }
-                    sw_bigramData.WriteLine("{0}\t{1}\t{2}", pair.Key, pair.Value, mi);
+                    sw_bigramData.WriteLine("{0}\t{1}", pair.Value, mi);
+
+                    bigramDict_da.Add(pair.Key, da_bigram_cnt);
+                    da_bigram_cnt++;
                 }
             }
             sw_bigramData.Close();
+
+
+            DoubleArrayTrieBuilder da_bigram = new DoubleArrayTrieBuilder(4);
+            da_bigram.build(bigramDict_da);
+            da_bigram.save(strBigramFileName + ".da");
 
             Console.WriteLine("Total query: {0}", queryCnt);
 

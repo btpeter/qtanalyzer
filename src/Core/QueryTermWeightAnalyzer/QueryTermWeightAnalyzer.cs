@@ -57,15 +57,20 @@ namespace QueryTermWeightAnalyzer
         CRFSharpWrapper.Decoder crf;
         ModelFeatureGenerator featureGenerator;
 
-        BigDictionary<string, Bigram> bigramDict;
-        BigDictionary<string, Unigram> unigramDict;
+        //BigDictionary<string, Bigram> bigramDict;
+        //BigDictionary<string, Unigram> unigramDict;
+
+        DoubleArrayTrieSearch unigram_da;
+        DoubleArrayTrieSearch bigram_da;
+        List<Unigram> unigramList;
+        List<Bigram> bigramList;
+
         HashSet<string> setPunct;
 
         double maxIDF = 0.0;
 
         List<IFeature> featureList;
         NNModel modelMSN;
-
 
         private void LoadPunctDict(string strFileName)
         {
@@ -114,7 +119,8 @@ namespace QueryTermWeightAnalyzer
                 string strLine = sr.ReadLine();
                 string[] items = strLine.Split('\t');
 
-                if (unigramDict.ContainsKey(items[0]) == true)
+                int idx = unigram_da.SearchByPerfectMatch(items[0]);
+                if (idx >= 0)
                 {
                     if (items[1] == "NaN")
                     {
@@ -137,11 +143,11 @@ namespace QueryTermWeightAnalyzer
                         items[5] = "0.0";
                     }
 
-                    unigramDict[items[0]].pRank0 = double.Parse(items[1]);
-                    unigramDict[items[0]].pRank1 = double.Parse(items[2]);
-                    unigramDict[items[0]].pRank2 = double.Parse(items[3]);
-                    unigramDict[items[0]].pRank3 = double.Parse(items[4]);
-                    unigramDict[items[0]].pRank4 = double.Parse(items[5]);
+                    unigramList[idx].pRank0 = double.Parse(items[1]);
+                    unigramList[idx].pRank1 = double.Parse(items[2]);
+                    unigramList[idx].pRank2 = double.Parse(items[3]);
+                    unigramList[idx].pRank3 = double.Parse(items[4]);
+                    unigramList[idx].pRank4 = double.Parse(items[5]);
                 }
             }
             sr.Close();
@@ -173,7 +179,9 @@ namespace QueryTermWeightAnalyzer
 
         private bool LoadUnigram(string strFileName)
         {
-            unigramDict = new BigDictionary<string, Unigram>();
+            unigram_da = new DoubleArrayTrieSearch();
+            unigram_da.Load(strFileName + ".da");
+            unigramList = new List<Unigram>();
             StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
             string strLine = null;
             while ((strLine = sr.ReadLine()) != null)
@@ -181,22 +189,15 @@ namespace QueryTermWeightAnalyzer
                 string[] items = strLine.Split('\t');
 
                 Unigram unigram = new Unigram();
-                unigram.freq = long.Parse(items[1]);
-                unigram.idf = double.Parse(items[2]);
+                unigram.freq = long.Parse(items[0]);
+                unigram.idf = double.Parse(items[1]);
                 unigram.pRank0 = -1;
                 unigram.pRank1 = -1;
                 unigram.pRank2 = -1;
                 unigram.pRank3 = -1;
                 unigram.pRank4 = -1;
 
-                if (unigramDict.ContainsKey(items[0]) == false)
-                {
-                    unigramDict.Add(items[0], unigram);
-                }
-                else
-                {
-                    Console.WriteLine("{0} is duplicated. [existed value:{1} new value:{2}]", items[0], unigramDict[items[0]].freq, unigram.freq);
-                }
+                unigramList.Add(unigram);
 
                 if (unigram.idf > maxIDF)
                 {
@@ -210,24 +211,19 @@ namespace QueryTermWeightAnalyzer
 
         private bool LoadBigram(string strFileName)
         {
-            bigramDict = new BigDictionary<string, Bigram>();
+            bigram_da = new DoubleArrayTrieSearch();
+            bigram_da.Load(strFileName + ".da");
+            bigramList = new List<Bigram>();
             StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
             string strLine = null;
             while ((strLine = sr.ReadLine()) != null)
             {
                 string[] items = strLine.Split('\t');
                 Bigram bigram = new Bigram();
-                bigram.freq = long.Parse(items[1]);
-                bigram.mi = double.Parse(items[2]);
+                bigram.freq = long.Parse(items[0]);
+                bigram.mi = double.Parse(items[1]);
 
-                if (bigramDict.ContainsKey(items[0]) == false)
-                {
-                    bigramDict.Add(items[0], bigram);
-                }
-                else
-                {
-                    Console.WriteLine("{0} is duplicated. [existed value:{1} new value:{2}]", items[0], bigramDict[items[0]].freq, bigram.freq);
-                }
+                bigramList.Add(bigram);
             }
             sr.Close();
 
@@ -372,19 +368,6 @@ namespace QueryTermWeightAnalyzer
 
         }
 
-      
-
-        private string GetTermRankTag(List<string> strTagList)
-        {
-            foreach (string item in strTagList)
-            {
-                if (item.StartsWith("RANK_") == true)
-                {
-                    return item;
-                }
-            }
-            return null;
-        }
 
         private List<string> ExtractCoreToken(List<Token> tknList)
         {
@@ -446,10 +429,10 @@ namespace QueryTermWeightAnalyzer
             }
         }
 
+        //Labeling tokens according its word formation by CRF model
         private List<Token> LabelString(List<string> termList)
         {
-            List<Token> tknList = new List<Token>();
-
+            //Extract features from given text
             List<List<string>> sinbuf = featureGenerator.GenerateFeature(termList);
             inbuf = new string[sinbuf.Count, sinbuf[0].Count];
             for (int i = 0; i < sinbuf.Count; i++)
@@ -460,13 +443,20 @@ namespace QueryTermWeightAnalyzer
                 }
             }
 
+            //Call CRFSharp to predict word formation tags
             int ret = crf.Segment(crf_out, crf_tag, inbuf, 1, 0);
+            //Only use 1st-best result
             crf_term_out item = crf_out.term_buf[0];
-            if (item.Count != termList.Count)
+            if (ret < 0 || item.Count != termList.Count)
             {
-                throw new Exception("Failed to parse word formation by model");
+                //CRF parsing is failed
+                string strMessage = "Failed to parse word formation by model. RetVal: " + ret.ToString() + ", Parsed Token Count: " + item.Count.ToString() + ", Input Token Count: " + termList.Count.ToString();
+                Console.WriteLine(strMessage);
+                return null;
             }
 
+            //Fill the token list
+            List<Token> tknList = new List<Token>();
             for (int j = 0; j < item.Count; j++)
             {
                 int offset = item.offsetList[j];
@@ -483,8 +473,8 @@ namespace QueryTermWeightAnalyzer
             return tknList;
         }
 
-
-        private List<Token> LabelString(string strText)
+        //Call word breaker to break given text
+        private List<string> WordBreak(string strText)
         {
             List<string> termList = new List<string>();
             wordseg.Segment(strText, wbTokens, false);
@@ -492,13 +482,15 @@ namespace QueryTermWeightAnalyzer
             {
                 if (wbTokens.tokenList[i].strTerm.Trim().Length == 0)
                 {
+                    //Ignore empty string
                     continue;
                 }
                 termList.Add(wbTokens.tokenList[i].strTerm);
             }
-            return LabelString(termList);
+            return termList;
         }
 
+        //Try to assign subTknList's rank id to tknList 
         private bool MergeTermWeight(List<Token> subTknList, List<Token> tknList)
         {
             if (HasOptTerms(subTknList) == false)
@@ -514,6 +506,7 @@ namespace QueryTermWeightAnalyzer
             {
                 if (tknList[j].rankId >= 2)
                 {
+                    //Ignore optional terms, just check core and normal terms
                     j++;
                     continue;
                 }
@@ -532,11 +525,13 @@ namespace QueryTermWeightAnalyzer
             {
                 if (tknList[j].rankId >= 2)
                 {
+                    //Found an optional terms, increase its rank id
                     tknList[j].rankId++;
                     j++;
                     continue;
                 }
 
+                //Assign rank id
                 tknList[j].rankId = subTknList[i].rankId;
                 i++;
                 j++;
@@ -546,11 +541,17 @@ namespace QueryTermWeightAnalyzer
 
         }
 
+        //Call CRF decoder to predict term important level by word formation
         public List<Token> AnalyzeWordFormationLevel(List<string> termList)
         {
             List<Token> tknList = LabelString(termList);
-            NormalizeTermWeight(tknList);
+            if (tknList == null)
+            {
+                //CRF decoder parse is failed
+                return null;
+            }
 
+            NormalizeTermWeight(tknList);
             if (HasOptTerms(tknList) == false)
             {
                 //No optional term, return directly
@@ -561,8 +562,13 @@ namespace QueryTermWeightAnalyzer
             {
                 List<string> coreTknList = ExtractCoreToken(tknList);
                 List<Token> tmpTknList = LabelString(coreTknList);
-                NormalizeTermWeight(tmpTknList);
+                if (tmpTknList == null)
+                {
+                    //CRF decoder parse is failed, abort current process
+                    break;
+                }
 
+                NormalizeTermWeight(tmpTknList);
                 if (MergeTermWeight(tmpTknList, tknList) == false)
                 {
                     //If no new result need to be mereged into result, end the process
@@ -573,64 +579,67 @@ namespace QueryTermWeightAnalyzer
             return tknList;
         }
 
-
+        //Call CRF decoder to predict term important level by word formation
         public List<Token> AnalyzeWordFormationLevel(string strText)
         {
-            List<Token> tknList = LabelString(strText);
-            NormalizeTermWeight(tknList);
-
-            if (HasOptTerms(tknList) == false)
-            {
-                //No optional term, return directly
-                return tknList;
-            }
-
-            while (true)
-            {
-                List<string> coreTknList = ExtractCoreToken(tknList);
-                List<Token> tmpTknList = LabelString(coreTknList);
-                NormalizeTermWeight(tmpTknList);
-
-                if (MergeTermWeight(tmpTknList, tknList) == false)
-                {
-                    //If no new result need to be mereged into result, end the process
-                    break;
-                }
-            }
-
-            return tknList;
+            List<string> termList = WordBreak(strText);
+            return AnalyzeWordFormationLevel(termList);
         }
 
+        //Analyze query term important level and score
         public List<Token> Analyze(string strText)
         {
+            //Normalize query
             strText = strText.ToLower().Trim();
-
+            //Call CRF decoder to analyze important level by word formation
             List<Token> tknList = AnalyzeWordFormationLevel(strText);
-            FeatureContext context = new FeatureContext();
-            context.bigramDict = bigramDict;
-            context.tknList = tknList;
-            context.unigramDict = unigramDict;
-            context.setPunct = setPunct;
-            context.maxIDF = maxIDF;
+            if (tknList == null)
+            {
+                //Analyze term important level by word formation is failed.
+                return null;
+            }
 
+            //Initialize ranking feature context
+            FeatureContext context = InitializeFeatureContext(tknList);
+            //Calcuate each term's important ranking score
             for (int i = 0; i < tknList.Count; i++)
             {
                 StringBuilder sb = new StringBuilder();
+                //Fill feature context
                 context.index = i;
+
+                //Extract features by current context
                 List<float> ftrList = new List<float>();
                 foreach (IFeature feature in featureList)
                 {
                     string strValue = feature.GetValue(context);
                     ftrList.Add(float.Parse(strValue));
                 }
+
+                //Predict term's ranking score
                 tknList[i].rankingscore = 1.0f - modelMSN.Evaluate(ftrList.ToArray());
             }
 
             return tknList;
         }
 
+        FeatureContext InitializeFeatureContext(List<Token> tknList)
+        {
+            FeatureContext context = new FeatureContext();
+            context.tknList = tknList;
+            context.unigram_da = unigram_da;
+            context.bigram_da = bigram_da;
+            context.unigramList = unigramList;
+            context.bigramList = bigramList;
+            context.setPunct = setPunct;
+            context.maxIDF = maxIDF;
+
+            return context;
+        }
+
         #region Feature Extractor
 
+        //List entire all features' name
         public string GetFeatureName()
         {
             StringBuilder sb = new StringBuilder();
@@ -645,16 +654,15 @@ namespace QueryTermWeightAnalyzer
         public List<string> ExtractFeature(List<string> termList)
         {
             List<Token> tknList = AnalyzeWordFormationLevel(termList);
+            if (tknList == null)
+            {
+                //Analyze term weight by word formation is failed
+                return null;
+            }
+
+            FeatureContext context = InitializeFeatureContext(tknList);
+
             List<string> rstList = new List<string>();
-
-            FeatureContext context = new FeatureContext();
-            context.bigramDict = bigramDict;
-            context.index = 0;
-            context.tknList = tknList;
-            context.unigramDict = unigramDict;
-            context.setPunct = setPunct;
-            context.maxIDF = maxIDF;
-
             for (int i = 0; i < tknList.Count; i++)
             {
                 StringBuilder sb = new StringBuilder();
