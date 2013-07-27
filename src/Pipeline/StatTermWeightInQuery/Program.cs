@@ -26,6 +26,7 @@ namespace StatTermWeightInQuery
         }
     }
 
+    //Sort query item by query string
     class QueryDict : IComparable<QueryDict>
     {
         public string strQuery;
@@ -39,32 +40,22 @@ namespace StatTermWeightInQuery
 
     class Program
     {
-        public static int MIN_QUERY_URL_PAIR_FREQUENCY = 2;
-        public static int MIN_CLUSTER_SIZE = 2;
-        //public static BigDictionary<string, List<QueryItem>> query2Item = new BigDictionary<string, List<QueryItem>>();
-        public static VarBigArray<QueryDict> queryDict = new VarBigArray<QueryDict>(1024000);
-        public static long queryDictIdx = 0;
+        static int MIN_QUERY_URL_PAIR_FREQUENCY = 2;
+        static int MIN_CLUSTER_SIZE = 3;
+        static VarBigArray<QueryDict> queryDict = new VarBigArray<QueryDict>(1024000);
+        static long queryDictIdx = 0;
 
-        private static StreamWriter sw;
-        public static Tokens tokens;
-        public static WordSeg.WordSeg wordseg;
+        static Tokens tokens;
+        static WordSeg.WordSeg wordseg;
 
+        static Dictionary<string, string> termNormDict;
 
-        private static string ShowTokenList(List<Token> tokenList)
+        //Check whether aList is subset of bList.
+        private static bool AsubOfB(List<Token> aList, List<Token> bList, List<Token> joinList)
         {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0;i < tokenList.Count;i++)
-            {
-                sb.Append(tokenList[i].strTerm);
-            }
-
-            return sb.ToString();
-        }
-
-        //Check whether aList is sub set of bList.
-        private static bool AsubOfB(List<Token> aList, List<Token> bList, List<Token> joinBList)
-        {
-            joinBList.Clear();
+            joinList.Clear();
+            //For each token in aList, check if it's also in bList, 
+            //If yes, save the token, otherwise, aList is not a subset of bList
             for (int i = 0; i < aList.Count; i++)
             {
                 bool bMatched = false;
@@ -72,7 +63,7 @@ namespace StatTermWeightInQuery
                 {
                     if (aList[i].strTerm == bList[j].strTerm)
                     {
-                        joinBList.Add(bList[j]);
+                        joinList.Add(bList[j]);
                         bMatched = true;
                         break;
                     }
@@ -87,17 +78,20 @@ namespace StatTermWeightInQuery
         }
 
 
-        private static bool AsubOfB_2(List<Token> aList, List<Token> bList, List<Token> joinBList)
+        //Check whether aList is superset of bList.
+        private static bool AsuperOfB(List<Token> aList, List<Token> bList, List<Token> joinList)
         {
-            joinBList.Clear();
-            for (int i = 0; i < aList.Count; i++)
+            joinList.Clear();
+            //For each token in aList, check if it's also in bList, 
+            //If yes, save the token, otherwise, aList is not a subset of bList
+            for (int i = 0; i < bList.Count; i++)
             {
                 bool bMatched = false;
-                for (int j = 0; j < bList.Count; j++)
+                for (int j = 0; j < aList.Count; j++)
                 {
-                    if (aList[i].strTerm == bList[j].strTerm)
+                    if (aList[j].strTerm == bList[i].strTerm)
                     {
-                        joinBList.Add(aList[i]);
+                        joinList.Add(bList[i]);
                         bMatched = true;
                         break;
                     }
@@ -111,33 +105,29 @@ namespace StatTermWeightInQuery
             return true;
         }
 
-        //public static void AddQueryList(List<QueryItem> qiList)
-        //{
-        //    foreach (QueryItem item in qiList)
-        //    {
-        //        string strQuery = item.strQuery.Replace(" ", "").ToLower().Trim();
-        //        if (query2Item.ContainsKey(strQuery) == false)
-        //        {
-        //            query2Item.Add(strQuery, new List<QueryItem>());
-        //        }
-        //        query2Item[strQuery].Add(item);
-        //    }
-        //}
 
         public static void AddQueryList(List<QueryItem> qiList)
         {
             foreach (QueryItem item in qiList)
             {
-                string strQuery = item.strQuery.Replace(" ", "").ToLower().Trim();
-                QueryDict qd = new QueryDict();
-                qd.strQuery = strQuery;
-                qd.qi = item;
-                queryDict[queryDictIdx] = qd;
-                queryDictIdx++;
+                if (item.tokenList != null)
+                {
+                    string strQuery = item.strQuery.ToLower().Trim();
+                    QueryDict qd = new QueryDict();
+                    qd.strQuery = strQuery;
+                    qd.qi = item;
+                    queryDict[queryDictIdx] = qd;
+                    queryDictIdx++;
+
+                    if (queryDictIdx % 100000 == 0)
+                    {
+                        Console.WriteLine("{0} query items have been generated.", queryDictIdx);
+                    }
+                }
             }
         }
 
-
+        //Initializing word breaker
         private static void InitializeWordBreaker(string strLexicalDictionary)
         {
             wordseg = new WordSeg.WordSeg();
@@ -145,23 +135,59 @@ namespace StatTermWeightInQuery
             tokens = wordseg.CreateTokens(1024);
         }
 
+        //Load mapping file for term normalizing
+        private static void LoadNormalizedMappingFile(string strFileName)
+        {
+            Console.WriteLine("Loading term normalizing mapping file...");
+            termNormDict = new Dictionary<string, string>();
+            StreamReader sr = new StreamReader(strFileName);
+            while (sr.EndOfStream == false)
+            {
+                string strLine = sr.ReadLine();
+                string[] items = strLine.Split('\t');
+
+                if (termNormDict.ContainsKey(items[1]) == false)
+                {
+                    termNormDict.Add(items[1], items[0]);
+                }
+                else if (termNormDict[items[1]] != items[0])
+                {
+                    Console.WriteLine("Duplicated normalize mapping {0} (mapping to {1} in dictionary)", items[1], termNormDict[items[1]]);
+                }
+            }
+            sr.Close();
+        }
+
+        //Normalize given term
+        public static string NormalizeTerm(string strTerm)
+        {
+            strTerm = strTerm.ToLower().Trim();
+            if (termNormDict.ContainsKey(strTerm) == true)
+            {
+                return termNormDict[strTerm];
+            }
+
+            return strTerm;
+        }
+
         private static void Main(string[] args)
         {
-            if (args.Length != 5)
+            if (args.Length != 6)
             {
-                Console.WriteLine("StatTermWeightInQuery [Query_ClusterId_Freq FileName] [Query_Term_Weight FileName] [Min Query_ClusterId Frequency] [Min Cluster Frequency] [Word Breaker Lex Dictionary]");
+                Console.WriteLine("StatTermWeightInQuery [Query_ClusterId_Freq FileName] [Query_Term_Weight FileName] [Min Query_ClusterId Frequency] [Min Cluster Size] [Word Breaker Lex Dictionary] [Normalize Mapping FileName]");
                 return;
             }
+
+            //Initialize parameters
             MIN_QUERY_URL_PAIR_FREQUENCY = int.Parse(args[2]);
             MIN_CLUSTER_SIZE = int.Parse(args[3]);
             InitializeWordBreaker(args[4]);
+            LoadNormalizedMappingFile(args[5]);
 
             Console.WriteLine("Start to process...");
             StreamReader reader = new StreamReader(args[0]);
-            sw = new StreamWriter(args[1], false, Encoding.UTF8);
 
             string lastUrl = "";
-            long recordCnt = 0;
             List<QueryItem> qiList = new List<QueryItem>();
             string strLine = null;
             while ((strLine = reader.ReadLine()) != null)
@@ -174,17 +200,13 @@ namespace StatTermWeightInQuery
                     continue;
                 }
 
-                recordCnt++;
-                if (recordCnt % 100000 == 0)
-                {
-                    Console.WriteLine("{0} Query-Url pair has been processed.", recordCnt);
-                }
-
+                //Construct query item instance
                 QueryItem item = new QueryItem
                 {
-                    strQuery = strArray[0],
+                    strQuery = NormalizeQuery(strArray[0]),
                     freq = int.Parse(strArray[2])
                 };
+
                 if (item.freq >= MIN_QUERY_URL_PAIR_FREQUENCY)
                 {
                     string strUrl = strArray[1];
@@ -204,6 +226,8 @@ namespace StatTermWeightInQuery
                     lastUrl = strUrl;
                 }
             }
+
+            //Stat the last query-url cluster
             if (qiList.Count >= 2)
             {
                 if (StatTermWeightInQuery(qiList) == true)
@@ -213,11 +237,11 @@ namespace StatTermWeightInQuery
             }
 
             Console.WriteLine("Merging clusters...");
-            MergeQueryWeight();
+            MergeQueryWeight(args[1]);
             reader.Close();
-            sw.Close();
         }
 
+        //Merge term weights of one query with different clicked-urls
         private static QueryItem MergeOneQuery(List<QueryItem> qiList)
         {
             //Calcuate query's total clicked freq in sum
@@ -260,6 +284,12 @@ namespace StatTermWeightInQuery
                 }
             }
 
+            //Invalidated query set, ignore it
+            if (bIgnore == true)
+            {
+                return null;
+            }
+
             return rstQueryItem;
         }
 
@@ -267,8 +297,10 @@ namespace StatTermWeightInQuery
         //A query may have relationship with more than one clicked-url. So it is necessary to
         //merge (query, clicked-url1, term weights1), (query, clicked-url2, term weights2) ... (query, clicked-urlN, term weightN) 
         //into a(query, term weight).
-        public static void MergeQueryWeight()
+        public static void MergeQueryWeight(string strSavedFileName)
         {
+            StreamWriter sw = new StreamWriter(strSavedFileName, false, Encoding.UTF8);
+
             Console.WriteLine("Sorting query dictionary...");
             queryDict.Sort(0, queryDictIdx);
             List<QueryItem> qiList = new List<QueryItem>();
@@ -281,22 +313,26 @@ namespace StatTermWeightInQuery
                 {
                     //Merge result
                     QueryItem rstQueryItem = MergeOneQuery(qiList);
+                    if (rstQueryItem != null)
+                    {
+                        //Calcuate query's total clicked freq in sum
+                        int iTotalFreq = 0;
+                        foreach (QueryItem item in qiList)
+                        {
+                            iTotalFreq += item.freq;
+                        }
+                        string strOutput = strQuery + "\t" + iTotalFreq.ToString() + "\t";
+                        for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
+                        {
+                            strOutput = strOutput + rstQueryItem.tokenList[i].strTerm + "[" + rstQueryItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
+                        }
+                        sw.WriteLine(strOutput);
+                    }
 
-                    //Calcuate query's total clicked freq in sum
-                    int iTotalFreq = 0;
-                    foreach (QueryItem item in qiList)
-                    {
-                        iTotalFreq += item.freq;
-                    }
-                    string strOutput = strQuery + "\t" + iTotalFreq.ToString() + "\t";
-                    for (int i = 0; i < rstQueryItem.tokenList.Count; i++)
-                    {
-                        strOutput = strOutput + rstQueryItem.tokenList[i].strTerm + "[" + rstQueryItem.tokenList[i].fWeight.ToString("0.##") + "]\t";
-                    }
-                    sw.WriteLine(strOutput);
+                    //Clear current list
+                    qiList.Clear();
                 }
 
-                qiList.Clear();
                 strQuery = queryDict[k].strQuery;
                 qiList.Add(queryDict[k].qi);
             }
@@ -318,88 +354,134 @@ namespace StatTermWeightInQuery
                 }
                 sw.WriteLine(strOutput);
             }
+
+            sw.Close();
         }
+
+        private static string NormalizeQuery(string strQuery)
+        {
+            StringBuilder sb = new StringBuilder();
+            //Break query string by given dictionary
+            wordseg.Segment(strQuery, tokens, false);
+            for (int i = 0; i < tokens.tokenList.Count; i++)
+            {
+                //Normalize term and if the term is empty, ignore it
+                WordSeg.Token wbTkn = tokens.tokenList[i];
+                string strTerm = NormalizeTerm(wbTkn.strTerm).Trim();
+                if (strTerm.Length == 0)
+                {
+                    continue;
+                }
+
+                sb.Append(strTerm);
+                sb.Append(" ");
+            }
+
+            return sb.ToString().Trim();
+        }
+
 
         private static bool StatTermWeightInQuery(List<QueryItem> qiList)
         {
-            List<QueryItem> tmp_qiList = new List<QueryItem>();
+            //Check each query item in qiList, and save good items for term weight calucating
+            int goodQueryItemCount = 0;
             foreach (QueryItem item in qiList)
             {
-                wordseg.Segment(item.strQuery, tokens, false);
                 List<Token> tknList = new List<Token>();
                 bool bIgnored = false;
-                for (int i = 0;i < tokens.tokenList.Count;i++)
+                //Break query string by given dictionary
+                wordseg.Segment(item.strQuery, tokens, false);
+                for (int i = 0; i < tokens.tokenList.Count; i++)
                 {
+                    //Normalize term and if the term is empty, ignore it
                     WordSeg.Token wbTkn = tokens.tokenList[i];
-                    if (wbTkn.strTerm.Trim().Length > 0)
+                    string strTerm = wbTkn.strTerm.Trim();
+                    if (strTerm.Length == 0)
                     {
-                        //ignore empty string
-                        Token token = new Token();
-                        token.strTerm = wbTkn.strTerm;
+                        continue;
+                    }
 
-                        //check duplicate terms in a query
-                        //If duplicated terms is found, drop current query
-                        for (int j = 0; j < tknList.Count; j++)
+                    //check duplicate terms in a query
+                    //If duplicated terms is found, drop current query
+                    for (int j = 0; j < tknList.Count; j++)
+                    {
+                        if (tknList[j].strTerm == strTerm)
                         {
-                            if (tknList[j].strTerm == token.strTerm)
-                            {
-                                //found it
-                                bIgnored = true;
-                                break;
-                            }
-                        }
-
-                        if (bIgnored == true)
-                        {
+                            //found the duplicated term
+                            bIgnored = true;
                             break;
                         }
-
-                        tknList.Add(token);
                     }
+
+                    if (bIgnored == true)
+                    {
+                        //Ignore the query with duplicated term
+                        break;
+                    }
+
+                    //Save the token into the list
+                    Token token = new Token();
+                    token.strTerm = strTerm;
+                    tknList.Add(token);
                 }
 
                 if (bIgnored == false)
                 {
                     item.tokenList = tknList;
-                    tmp_qiList.Add(item);
+                    goodQueryItemCount++;
+                }
+                else
+                {
+                    item.tokenList= null;
                 }
             }
 
-            qiList.Clear();
-
+            //The flag for checking whether query is sub-query or super-query for all other queries in the cluster
             bool bEntireCluster = false;
-            for (int i = 0;i < tmp_qiList.Count;i++)
+            for (int i = 0;i < qiList.Count;i++)
             {
-                Dictionary<Token, int> termHash2Freq = new Dictionary<Token, int>();
-                int totalFreq = tmp_qiList[i].freq;
-                int queryInCluster = 0;
-                foreach (Token item in tmp_qiList[i].tokenList)
+                QueryItem selQueryItem = qiList[i];
+                if (selQueryItem.tokenList == null)
                 {
-                    termHash2Freq.Add(item, tmp_qiList[i].freq);
+                    continue;
                 }
 
-                //Check all qiList[i]'s sub-query and statistic frequency
-                for (int j = 0; j < tmp_qiList.Count; j++)
+                Dictionary<Token, int> termHash2Freq = new Dictionary<Token, int>();
+                int totalFreq = selQueryItem.freq;
+                int queryInCluster = 1;
+                foreach (Token item in selQueryItem.tokenList)
                 {
-                    if (i != j)
+                    termHash2Freq.Add(item, selQueryItem.freq);
+                }
+
+                //Check selQueryItem's sub-query and super-query, and statistic frequency
+                for (int j = 0; j < qiList.Count; j++)
+                {
+                    if (i != j && qiList[j].tokenList != null)
                     {
                         List<Token> joinBList = new List<Token>();
-                        if (AsubOfB(tmp_qiList[j].tokenList, tmp_qiList[i].tokenList, joinBList) == true)
+                        //Try to find selQueryItem's sub-query
+                        if (AsubOfB(qiList[j].tokenList, selQueryItem.tokenList, joinBList) == true)
                         {
+                            //Found a sub-query of selQueryItem
+                            //Increase the cluster, query and term's frequency
                             queryInCluster++;
-                            totalFreq += tmp_qiList[j].freq;
+                            totalFreq += qiList[j].freq;
                             foreach (Token item in joinBList)
                             {
-                                termHash2Freq[item] += tmp_qiList[j].freq;
+                                termHash2Freq[item] += qiList[j].freq;
                             }
                         }
-                        else if (AsubOfB_2(tmp_qiList[i].tokenList, tmp_qiList[j].tokenList, joinBList) == true)
+                        //Try to find selQueryItem's super-query
+                        else if (AsuperOfB(qiList[j].tokenList, selQueryItem.tokenList, joinBList) == true)
                         {
+                            //Found a super-query of selQueryItem
+                            //Increase the cluster, query and term's frequency
                             queryInCluster++;
-                            totalFreq += tmp_qiList[j].freq;
+                            totalFreq += qiList[j].freq;
                             foreach (Token item in joinBList)
                             {
-                                termHash2Freq[item] += tmp_qiList[j].freq;
+                                termHash2Freq[item] += qiList[j].freq;
                             }
                         }
                     }
@@ -407,22 +489,22 @@ namespace StatTermWeightInQuery
 
                 if (queryInCluster < MIN_CLUSTER_SIZE)
                 {
+                    //The generated cluster is too small, ignore current query item
+                    selQueryItem.tokenList = null;
                     continue;
                 }
 
-                if (queryInCluster + 1 == tmp_qiList.Count && tmp_qiList[i].strQuery.Length >= 2)
+                if (queryInCluster == goodQueryItemCount && selQueryItem.strQuery.Length >= 2)
                 {
                     //All other queries are current query's sub or super set.
                     bEntireCluster = true;
                 }
-                
-                foreach (Token item in tmp_qiList[i].tokenList)
+
+                foreach (Token item in selQueryItem.tokenList)
                 {
                     double fWeight = ((double)termHash2Freq[item]) / ((double)totalFreq);
                     item.fWeight = fWeight;
                 }
-
-                qiList.Add(tmp_qiList[i]);
             }
 
             return bEntireCluster;

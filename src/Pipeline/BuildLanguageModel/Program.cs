@@ -13,14 +13,52 @@ namespace BuildLanguageModel
     {
         static WordSeg.WordSeg wordseg;
         static WordSeg.Tokens wbTokens;
+        static Dictionary<string, string> termNormDict;
+
+        //Load mapping file for term normalizing
+        private static void LoadNormalizedMappingFile(string strFileName)
+        {
+            Console.WriteLine("Loading term normalizing mapping file...");
+            termNormDict = new Dictionary<string, string>();
+            StreamReader sr = new StreamReader(strFileName);
+            while (sr.EndOfStream == false)
+            {
+                string strLine = sr.ReadLine();
+                string[] items = strLine.Split('\t');
+
+                if (termNormDict.ContainsKey(items[1]) == false)
+                {
+                    termNormDict.Add(items[1], items[0]);
+                }
+                else if (termNormDict[items[1]] != items[0])
+                {
+                    Console.WriteLine("Duplicated normalize mapping {0} (mapping to {1} in dictionary)", items[1], termNormDict[items[1]]);
+                }
+            }
+            sr.Close();
+        }
+
+        //Normalize given term
+        public static string NormalizeTerm(string strTerm)
+        {
+            strTerm = strTerm.ToLower().Trim();
+            if (termNormDict.ContainsKey(strTerm) == true)
+            {
+                return termNormDict[strTerm];
+            }
+
+            return strTerm;
+        }
 
         static void Main(string[] args)
         {
-            if (args.Length != 3)
+            if (args.Length != 4)
             {
-                Console.WriteLine("BuildLanguageModel.exe [lexical dictionary] [input file] [output file]");
+                Console.WriteLine("BuildLanguageModel.exe [lexical dictionary] [term normalizing mapping file] [input file] [output file]");
                 return;
             }
+
+            LoadNormalizedMappingFile(args[1]);
 
             wordseg = new WordSeg.WordSeg();
             //Load lexical dictionary
@@ -28,7 +66,7 @@ namespace BuildLanguageModel
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
 
-            StreamReader sr = new StreamReader(args[1], Encoding.UTF8);
+            StreamReader sr = new StreamReader(args[2], Encoding.UTF8);
             string strLine = null;
             BigDictionary<string, int> bigram = new BigDictionary<string, int>();
             BigDictionary<string, int> unigram = new BigDictionary<string, int>();
@@ -44,15 +82,18 @@ namespace BuildLanguageModel
                 docCnt++;
                 HashSet<string> setTerm = new HashSet<string>();
 
+                //Break the given query
                 wordseg.Segment(strQuery, wbTokens, false);
                 for (int i = 0; i < wbTokens.tokenList.Count; i++)
                 {
-                    string strTerm = wbTokens.tokenList[i].strTerm.Trim().Replace(" ", "");
+                    string strTerm = NormalizeTerm(wbTokens.tokenList[i].strTerm);
+                    strTerm = strTerm.Replace(" ", "");
                     if (strTerm.Length == 0)
                     {
                         continue;
                     }
 
+                    //Generate unigram data
                     if (unigram.ContainsKey(strTerm) == false)
                     {
                         unigram.Add(strTerm, freq);
@@ -62,6 +103,7 @@ namespace BuildLanguageModel
                         unigram[strTerm] += freq;
                     }
 
+                    //Generate unigram DF
                     if (setTerm.Contains(strTerm) == false)
                     {
                         setTerm.Add(strTerm);
@@ -77,7 +119,9 @@ namespace BuildLanguageModel
 
                     if (i < wbTokens.tokenList.Count - 1)
                     {
-                        string strTerm2 = wbTokens.tokenList[i + 1].strTerm;
+                        //Generate bigram data
+                        string strTerm2 = NormalizeTerm(wbTokens.tokenList[i + 1].strTerm);
+                        strTerm2 = strTerm2.Replace(" ", "");
                         string strBigram = strTerm + " " + strTerm2;
                         if (bigram.ContainsKey(strBigram) == false)
                         {
@@ -93,7 +137,7 @@ namespace BuildLanguageModel
             sr.Close();
 
             //Save unigram data
-            string strUnigramFileName = args[2] + ".uni";
+            string strUnigramFileName = args[3] + ".uni";
             StreamWriter sw_unigramData = new StreamWriter(strUnigramFileName, false, Encoding.UTF8, 102400);
        
             //Build double array trie-tree key and value pairs
@@ -154,7 +198,7 @@ namespace BuildLanguageModel
             }
 
             //Save bigram data
-            string strBigramFileName = args[2] + ".bi";
+            string strBigramFileName = args[3] + ".bi";
             StreamWriter sw_bigramData = new StreamWriter(strBigramFileName, false, Encoding.UTF8, 102400);
             SortedDictionary<string, int> bigramDict_da = new SortedDictionary<string, int>(StringComparer.Ordinal);
             int da_bigram_cnt = 0;
@@ -175,7 +219,7 @@ namespace BuildLanguageModel
             }
             sw_bigramData.Close();
 
-
+            //Save bigram into DART file
             DoubleArrayTrieBuilder da_bigram = new DoubleArrayTrieBuilder(4);
             da_bigram.build(bigramDict_da);
             da_bigram.save(strBigramFileName + ".da");

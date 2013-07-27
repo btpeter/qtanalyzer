@@ -69,11 +69,11 @@ namespace BuildQueryTermWeightCorpus
             return rstList;
         }
 
-        //Calculate threshold list
+        //Calculate topN maximum threshold list
         //scoreList : all weight score in a query, the scores in the list must be sorted from big to small
         //thresholdCnt : the number of thresholds
         //minGap : the minimum score gap between two adjacent scores
-        static List<double> CalcThreshold(List<ScoreItem> scoreList, int thresholdCnt, double minGap)
+        static List<double> CalcTopNMaxThreshold(List<ScoreItem> scoreList, int thresholdCnt, double minGap)
         {
             //Calculate all score gaps
             SortedList<double, List<ScoreItem>> gap2scoreList = new SortedList<double, List<ScoreItem>>();
@@ -143,7 +143,7 @@ namespace BuildQueryTermWeightCorpus
         {
             if (args.Length != 6)
             {
-                Console.WriteLine("BuildQueryTermWeightCorpus.txt [Min frequency in query] [Query Segment Labels] [Min Segment Gap] [Lexical dictionary file name] [Query term weight score file name] [Training corpus file name]");
+                Console.WriteLine("BuildQueryTermWeightCorpus.exe [Min frequency in query] [Query Segment Labels] [Min Segment Gap] [Lexical dictionary file name] [Query term weight score file name] [Training corpus file name]");
                 return;
             }
 
@@ -187,15 +187,15 @@ namespace BuildQueryTermWeightCorpus
                     //Get query features
                     SortedDictionary<double, int> sdict = new SortedDictionary<double, int>();
                     double maxWeight = -1.0;
-                    double minWeight = 2.0;
-                    int coreTerm = 0;
                     for (int i = 2; i < items.Length; i++)
                     {
                         if (items[i].Trim().Length == 0)
                         {
+                            //Ignore empty term
                             continue;
                         }
 
+                        //Parse item and get term string and its weight score
                         int pos = items[i].IndexOf('[');
                         string strTerm = items[i].Substring(0, pos).Trim().ToLower();
                         if (strTerm.Length == 0)
@@ -211,19 +211,16 @@ namespace BuildQueryTermWeightCorpus
                         }
                         sdict[fWeight] += strTerm.Length;
 
+                        //Try to get maximum weight score in current query
                         if (fWeight >= maxWeight)
                         {
                             maxWeight = fWeight;
                         }
-                        if (fWeight <= minWeight)
-                        {
-                            minWeight = fWeight;
-                        }
+                    }
 
-                        if (fWeight == 1.0)
-                        {
-                            coreTerm++;
-                        }
+                    if (maxWeight < 1.0)
+                    {
+                        continue;
                     }
 
                     //Sort weight score list
@@ -238,9 +235,9 @@ namespace BuildQueryTermWeightCorpus
                         scoreList.Add(scoreItem);
                     }
 
-                    //Find top-ThresholdNum threshold value
+                    //Find topN max threshold value
                     List<double> thresholdList = null;
-                    thresholdList = CalcThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
+                    thresholdList = CalcTopNMaxThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
                     if (thresholdList.Count != MAX_THRESHOLD_NUM)
                     {
                         continue;
@@ -250,7 +247,7 @@ namespace BuildQueryTermWeightCorpus
                     {
                         int coreCnt = 0;
                         int otherCnt = 0;
-                        //Check core term
+                        //Count the number of core terms
                         foreach (KeyValuePair<double, int> pair in sdict)
                         {
                             if (pair.Key > thresholdList[0])
@@ -277,6 +274,7 @@ namespace BuildQueryTermWeightCorpus
                             continue;
                         }
 
+                        //Parse training corpus
                         int pos = items[i].IndexOf('[');
                         string strTerm = items[i].Substring(0, pos).Trim().ToLower();
                         if (strTerm.Length == 0)
@@ -314,9 +312,13 @@ namespace BuildQueryTermWeightCorpus
                         tkList.Add(tk);
                     }
 
+                    //Merge contigous terms with same tag
                     tkList = MergeTokenList(tkList);
+                    //Re-segment terms by given lexical dictionary
                     tkList = ResegmentTokenList(tkList);
                     string strOutput = "";
+
+                    //Generate term important level corpus
                     foreach (Token tk in tkList)
                     {
                         string strTag = tk.strTag;

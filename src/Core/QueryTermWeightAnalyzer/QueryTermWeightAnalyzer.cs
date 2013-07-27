@@ -38,6 +38,7 @@ namespace QueryTermWeightAnalyzer
 
     public class QueryTermWeightAnalyzer
     {
+        //Key items in configuration file
         const string KEY_LEXICAL_DICT_FILE_NAME = "LexicalDictFileName";
         const string KEY_MODEL_FILE_NAME = "ModelFileName";
         const string KEY_UNIGRAM_FILE_NAME = "UnigramFileName";
@@ -46,10 +47,19 @@ namespace QueryTermWeightAnalyzer
         const string KEY_RANKMODEL_FILE_NAME = "RankingModelFileName";
         const string KEY_ACTIVEFEATURE_FILE_NAME = "ActiveFeatureFileName";
         const string KEY_PUNCT_DICT_FILE_NAME = "PunctDictFileName";
-        
+        const string KEY_NORMALIZED_TERM_FILE_NAME = "NormalizedTermFileName";
+        const string KEY_RUN_RANKER_MODEL = "RunRankerModel";
+  
+        //Run ranker model
+        bool bRunRankerModel = true;
+
+        //word breaker
         WordSeg.WordSeg wordseg;
         WordSeg.Tokens wbTokens;
 
+        //Feature set for ranker
+
+        //CRF model
         public crf_out crf_out;
         public SegDecoderTagger crf_tag;
         public string[,] inbuf;
@@ -57,20 +67,22 @@ namespace QueryTermWeightAnalyzer
         CRFSharpWrapper.Decoder crf;
         ModelFeatureGenerator featureGenerator;
 
-        //BigDictionary<string, Bigram> bigramDict;
-        //BigDictionary<string, Unigram> unigramDict;
-
+        //Language models
         DoubleArrayTrieSearch unigram_da;
         DoubleArrayTrieSearch bigram_da;
         List<Unigram> unigramList;
         List<Bigram> bigramList;
-
         HashSet<string> setPunct;
-
         double maxIDF = 0.0;
 
+        //feature list
         List<IFeature> featureList;
+
+        //Ranking model
         NNModel modelMSN;
+
+        //Term normalizing mapping
+        Dictionary<string, string> termNormDict;
 
         private void LoadPunctDict(string strFileName)
         {
@@ -153,6 +165,7 @@ namespace QueryTermWeightAnalyzer
             sr.Close();
         }
 
+        //Initialize feature list
         private List<IFeature> InitFeatureList()
         {
             List<IFeature> featureList = new List<IFeature>();
@@ -177,6 +190,7 @@ namespace QueryTermWeightAnalyzer
             return featureList;
         }
 
+        //Load unigram data from DART file
         private bool LoadUnigram(string strFileName)
         {
             unigram_da = new DoubleArrayTrieSearch();
@@ -199,6 +213,7 @@ namespace QueryTermWeightAnalyzer
 
                 unigramList.Add(unigram);
 
+                //Find the max IDF value from unigram set
                 if (unigram.idf > maxIDF)
                 {
                     maxIDF = unigram.idf;
@@ -209,6 +224,7 @@ namespace QueryTermWeightAnalyzer
             return true;
         }
 
+        //Load Bigram data from DART file
         private bool LoadBigram(string strFileName)
         {
             bigram_da = new DoubleArrayTrieSearch();
@@ -230,16 +246,22 @@ namespace QueryTermWeightAnalyzer
             return true;
         }
 
-
+        //Load ini file items
         private Dictionary<string, string> LoadConfFile(string strConfFileName)
         {
             Dictionary<string, string> dict = new Dictionary<string, string>();
             StreamReader sr = new StreamReader(strConfFileName);
             while (sr.EndOfStream == false)
             {
-                string strLine = sr.ReadLine();
-                string[] items = strLine.Split('=');
+                string strLine = sr.ReadLine().Trim().ToLower();
+                if (strLine.Length == 0)
+                {
+                    //Ignore empty line
+                    continue;
+                }
 
+                //Split key and vlaue pair
+                string[] items = strLine.Split('=');
                 items[0] = items[0].ToLower().Trim();
                 items[1] = items[1].ToLower().Trim();
 
@@ -250,10 +272,11 @@ namespace QueryTermWeightAnalyzer
                     items[0] != KEY_RANKPERCENT_FILE_NAME.ToLower() &&
                     items[0] != KEY_RANKMODEL_FILE_NAME.ToLower() &&
                     items[0] != KEY_ACTIVEFEATURE_FILE_NAME.ToLower() &&
-                    items[0] != KEY_PUNCT_DICT_FILE_NAME.ToLower())
+                    items[0] != KEY_PUNCT_DICT_FILE_NAME.ToLower() &&
+                    items[0] != KEY_NORMALIZED_TERM_FILE_NAME.ToLower() &&
+                    items[0] != KEY_RUN_RANKER_MODEL.ToLower())
                 {
-                    throw new Exception("Invalidated configuration item");
-
+                    return null;
                 }
                 dict.Add(items[0], items[1]);
             }
@@ -263,13 +286,39 @@ namespace QueryTermWeightAnalyzer
             return dict;
         }
 
+        //Load mapping file for term normalizing
+        private void LoadNormalizedMappingFile(string strFileName)
+        {
+            termNormDict = new Dictionary<string, string>();
+            StreamReader sr = new StreamReader(strFileName);
+            while (sr.EndOfStream == false)
+            {
+                string strLine = sr.ReadLine();
+                string[] items = strLine.Split('\t');
+
+                if (termNormDict.ContainsKey(items[1]) == false)
+                {
+                    termNormDict.Add(items[1], items[0]);
+                }
+                else if (termNormDict[items[1]] != items[0])
+                {
+                    Console.WriteLine("Duplicated normalize mapping {0} (mapping to {1} in dictionary)", items[1], termNormDict[items[1]]);
+                }
+            }
+            sr.Close();
+        }
 
         public bool Initialize(string strConfFileName)
         {
             //Load configuration file
             Dictionary<string, string> confDict;
             confDict = LoadConfFile(strConfFileName);
+            if (confDict == null)
+            {
+                return false;
+            }
 
+            //Check required item
             if (confDict.ContainsKey(KEY_LEXICAL_DICT_FILE_NAME.ToLower()) == false)
             {
                 Console.WriteLine("Failed to find key {0}", KEY_LEXICAL_DICT_FILE_NAME);
@@ -281,6 +330,9 @@ namespace QueryTermWeightAnalyzer
                 Console.WriteLine("Failed to find key {0}", KEY_MODEL_FILE_NAME);
                 return false;
             }
+
+            //Load temr normalizing mapping file
+            LoadNormalizedMappingFile(confDict[KEY_NORMALIZED_TERM_FILE_NAME.ToLower()]);
 
             //Load CRF model for word formation
             crf = new CRFSharpWrapper.Decoder();
@@ -297,6 +349,15 @@ namespace QueryTermWeightAnalyzer
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
 
+            if (confDict.ContainsKey(KEY_RUN_RANKER_MODEL.ToLower()) == true)
+            {
+                bRunRankerModel = bool.Parse(confDict[KEY_RUN_RANKER_MODEL.ToLower()]);
+            }
+            if (bRunRankerModel == false)
+            {
+                return true;
+            }
+
             //Load punct dict
             if (confDict.ContainsKey(KEY_PUNCT_DICT_FILE_NAME.ToLower()) == true)
             {
@@ -309,6 +370,7 @@ namespace QueryTermWeightAnalyzer
             }
 
             //Load language model
+            //Load unigram data
             if (confDict.ContainsKey(KEY_UNIGRAM_FILE_NAME.ToLower()) == true)
             {
                 if (LoadUnigram(confDict[KEY_UNIGRAM_FILE_NAME.ToLower()]) == false)
@@ -322,6 +384,7 @@ namespace QueryTermWeightAnalyzer
                 return false;
             }
 
+            //Load bigram data
             if (confDict.ContainsKey(KEY_BIGRAM_FILE_NAME.ToLower()) == true)
             {
                 if (LoadBigram(confDict[KEY_BIGRAM_FILE_NAME.ToLower()]) == false)
@@ -335,6 +398,7 @@ namespace QueryTermWeightAnalyzer
                 return false;
             }
 
+            //Load term important level percent data
             if (confDict.ContainsKey(KEY_RANKPERCENT_FILE_NAME.ToLower()) == true)
             {
                 LoadRankPercent(confDict[KEY_RANKPERCENT_FILE_NAME.ToLower()]);
@@ -368,7 +432,19 @@ namespace QueryTermWeightAnalyzer
 
         }
 
+        //Normalize given term
+        private string NormalizeTerm(string strTerm)
+        {
+            strTerm = strTerm.ToLower().Trim();
+            if (termNormDict.ContainsKey(strTerm) == true)
+            {
+                return termNormDict[strTerm];
+            }
 
+            return strTerm;
+        }
+
+        //Extract string which is core or normal term
         private List<string> ExtractCoreToken(List<Token> tknList)
         {
             StringBuilder sb = new StringBuilder();
@@ -383,6 +459,7 @@ namespace QueryTermWeightAnalyzer
             return termList;
         }
 
+        //Check whether token list contain optional term
         private bool HasOptTerms(List<Token> tknList)
         {
             foreach (Token tkn in tknList)
@@ -395,6 +472,7 @@ namespace QueryTermWeightAnalyzer
             return false;
         }
 
+        //Normalize token weight level in the given list
         private void NormalizeTermWeight(List<Token> tknList)
         {
             //Check the number of token with rank0, if there is no such token, 
@@ -434,17 +512,9 @@ namespace QueryTermWeightAnalyzer
         {
             //Extract features from given text
             List<List<string>> sinbuf = featureGenerator.GenerateFeature(termList);
-            inbuf = new string[sinbuf.Count, sinbuf[0].Count];
-            for (int i = 0; i < sinbuf.Count; i++)
-            {
-                for (int j = 0; j < sinbuf[0].Count; j++)
-                {
-                    inbuf[i, j] = sinbuf[i][j];
-                }
-            }
 
             //Call CRFSharp to predict word formation tags
-            int ret = crf.Segment(crf_out, crf_tag, inbuf, 1, 0);
+            int ret = crf.Segment(crf_out, crf_tag, sinbuf, 1, 0);
             //Only use 1st-best result
             crf_term_out item = crf_out.term_buf[0];
             if (ret < 0 || item.Count != termList.Count)
@@ -480,12 +550,13 @@ namespace QueryTermWeightAnalyzer
             wordseg.Segment(strText, wbTokens, false);
             for (int i = 0; i < wbTokens.tokenList.Count; i++)
             {
-                if (wbTokens.tokenList[i].strTerm.Trim().Length == 0)
+                string strTerm = NormalizeTerm((wbTokens.tokenList[i].strTerm));
+                if (strTerm.Length == 0)
                 {
                     //Ignore empty string
                     continue;
                 }
-                termList.Add(wbTokens.tokenList[i].strTerm);
+                termList.Add(strTerm);
             }
             return termList;
         }
@@ -599,6 +670,12 @@ namespace QueryTermWeightAnalyzer
                 return null;
             }
 
+            if (bRunRankerModel == false)
+            {
+                //No need to run ranker
+                return tknList;
+            }
+
             //Initialize ranking feature context
             FeatureContext context = InitializeFeatureContext(tknList);
             //Calcuate each term's important ranking score
@@ -651,6 +728,7 @@ namespace QueryTermWeightAnalyzer
             return sb.ToString().Trim();
         }
         
+        //Extract given terms feature set as string format
         public List<string> ExtractFeature(List<string> termList)
         {
             List<Token> tknList = AnalyzeWordFormationLevel(termList);
