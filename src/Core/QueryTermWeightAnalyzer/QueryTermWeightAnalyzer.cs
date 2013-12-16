@@ -276,6 +276,7 @@ namespace QueryTermWeightAnalyzer
                     items[0] != KEY_NORMALIZED_TERM_FILE_NAME.ToLower() &&
                     items[0] != KEY_RUN_RANKER_MODEL.ToLower())
                 {
+                    Console.WriteLine("{0} is invalidated item", strLine);
                     return null;
                 }
                 dict.Add(items[0], items[1]);
@@ -451,6 +452,7 @@ namespace QueryTermWeightAnalyzer
             List<string> termList = new List<string>();
             foreach (Token tkn in tknList)
             {
+                //By design, the important level of core and normal term is less than 2
                 if (tkn.rankId < 2)
                 {
                     termList.Add(tkn.strTerm);
@@ -508,6 +510,7 @@ namespace QueryTermWeightAnalyzer
         }
 
         //Labeling tokens according its word formation by CRF model
+        private static string strRankTagPrefix = "RANK_";
         private List<Token> LabelString(List<string> termList)
         {
             //Extract features from given text
@@ -529,13 +532,13 @@ namespace QueryTermWeightAnalyzer
             List<Token> tknList = new List<Token>();
             for (int j = 0; j < item.Count; j++)
             {
-                int offset = item.offsetList[j];
-                int len = item.lengthList[j];
-                string strNE = item.nePropList[j].strTag;
+                int offset = item.tokenList[j].offset;
+                int len = item.tokenList[j].length;
+                string strNE = item.tokenList[j].strTag;
 
                 Token token = new Token();
                 token.strTerm = termList[j];
-                token.rankId = int.Parse(item.nePropList[j].strTag.Substring(5));
+                token.rankId = int.Parse(strNE.Substring(strRankTagPrefix.Length));
 
                 tknList.Add(token);
             }

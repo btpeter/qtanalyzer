@@ -24,7 +24,8 @@ namespace ClusterUrl
     class QueryItem
     {
         public string strQuery;
-        public int weight;
+        public int freq;
+        public double clickweight;
     }
 
     class Program
@@ -47,9 +48,9 @@ namespace ClusterUrl
 
         static void Main(string[] args)
         {
-            if (args.Length != 3)
+            if (args.Length != 4)
             {
-                Console.WriteLine("ClusterUrl [Query Url Freq file name] [Query ClusterId Freq file name] [Min Query Url Frequency]");
+                Console.WriteLine("ClusterUrl [input:query_url_freq_clickweight file name] [output:query_clusterId_freq_clickweight file name] [input:min frequency] [input:min clickweight]");
                 return;
             }
 
@@ -58,10 +59,11 @@ namespace ClusterUrl
             UrlEntity entity = null;
             int maxLine = 0;
             int minFreq = int.Parse(args[2]);
+            double minClickWeight = double.Parse(args[3]);
             string strLine = null;
             while ((strLine = sr.ReadLine()) != null)
             {
-                //Query \t Url \t Freq
+                //Query \t Url \t Freq \t Clickweight
                 string[] items = strLine.Split('\t');
 
                 string strQuery = items[0].ToLower().Trim();
@@ -70,8 +72,14 @@ namespace ClusterUrl
                 items[1] = items[1].ToLower().Trim();
 
                 string strUrl = items[1];
-                int weight = int.Parse(items[2]);
-                if (weight < minFreq)
+                int freq = int.Parse(items[2]);
+                if (freq < minFreq)
+                {
+                    continue;
+                }
+
+                double clickweight = double.Parse(items[3]);
+                if (clickweight < minClickWeight)
                 {
                     continue;
                 }
@@ -84,7 +92,8 @@ namespace ClusterUrl
 
                 QueryItem qi = new QueryItem();
                 qi.strQuery = strQuery;
-                qi.weight = weight;
+                qi.freq = freq;
+                qi.clickweight = clickweight;
 
                 if (entity == null)
                 {
@@ -104,7 +113,7 @@ namespace ClusterUrl
                     {
                         foreach (QueryItem item in entity.featureSet)
                         {
-                            sw.WriteLine("{0}\t{1}\t{2}", item.strQuery, entity.strUrl, item.weight);
+                            sw.WriteLine("{0}\t{1}\t{2}\t{3}", item.strQuery, entity.strUrl, item.freq, item.clickweight);
                         }
                     }
 
@@ -119,7 +128,7 @@ namespace ClusterUrl
             {
                 foreach (QueryItem item in entity.featureSet)
                 {
-                    sw.WriteLine("{0}\t{1}\t{2}", item.strQuery, entity.strUrl, item.weight);
+                    sw.WriteLine("{0}\t{1}\t{2}\t{3}", item.strQuery, entity.strUrl, item.freq, item.clickweight);
                 }
             }
 

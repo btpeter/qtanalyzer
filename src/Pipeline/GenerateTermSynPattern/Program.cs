@@ -19,6 +19,7 @@ namespace GenerateTermSynPattern
     {
         public string strQuery;
         public int freq;
+        public double clickweight;
     }
 
     class Program
@@ -45,6 +46,7 @@ namespace GenerateTermSynPattern
             //Generate each token's context as candidated patterns
             for (int i = 0; i < tokens.tokenList.Count; i++)
             {
+                //Generate pattern for unigram
                 int begin = tokens.tokenList[i].offset;
                 int len = tokens.tokenList[i].len;
                 if (len == 0)
@@ -101,6 +103,7 @@ namespace GenerateTermSynPattern
                     keyTermList.Add(subpair.Key);
                 }
 
+                //Counting pattern frequency
                 if (pattern2Freq.ContainsKey(pair.Key) == false)
                 {
                     pattern2Freq.Add(pair.Key, keyTermList.Count * (keyTermList.Count - 1) / 2);
@@ -148,7 +151,7 @@ namespace GenerateTermSynPattern
         {
             if (args.Length != 4)
             {
-                Console.WriteLine("GenerateTermSynPattern.exe [Word breaker lexical file name] [Query ClusterId Freq File Name] [Term Syn Pattern File Name] [Bigram Model]");
+                Console.WriteLine("GenerateTermSynPattern.exe [input:word breaker lexical file] [input:query_clusterId_freq_clickweight file] [output:term_syn_pattern file] [output:bigram model]");
                 return;
             }
 
@@ -177,9 +180,14 @@ namespace GenerateTermSynPattern
                 qi.strQuery = JPNUtils.ToDBC(qi.strQuery);
                 qi.strQuery = qi.strQuery.Replace(" ", "");
                 qi.strQuery = qi.strQuery.ToLower();
-
-
                 qi.freq = int.Parse(items[2]);
+                qi.clickweight = double.Parse(items[3]);
+
+                //Query url whose frequency or clickweight is too low will be ignored.
+                if (qi.clickweight < 5.0)
+                {
+                    continue;
+                }
 
                 if (strLastUrl == "")
                 {
@@ -196,7 +204,7 @@ namespace GenerateTermSynPattern
                         //If too many unique queries click the same url,
                         //The url may be low quaility, since it has too many
                         //different meaning, so ignore this cluster
-                        if (qiList.Count < 50)
+                        if (qiList.Count < 100)
                         {
                             StatPatternList(qiList);
                         }
@@ -516,51 +524,81 @@ namespace GenerateTermSynPattern
                     sb.Append(ctxCnt);
                     sb.Append("\t");
 
-                    ////ranking contexts for each term syn pair
-                    //int twoTermFreq = 0;
-                    //foreach (KeyValuePair<string, int> subpair in pair.Value)
-                    //{
-                    //    twoTermFreq += subpair.Value;
-                    //}
+                    //ranking contexts for each term syn pair
+                    int twoTermFreq = 0;
+                    foreach (KeyValuePair<string, int> subpair in pair.Value)
+                    {
+                        twoTermFreq += subpair.Value;
+                    }
 
-                    //SortedDictionary<double, List<string>> sPatternDict = new SortedDictionary<double, List<string>>();
-                    //foreach (KeyValuePair<string, int> subpair in pair.Value)
-                    //{
-                    //    double N = totalSampleCnt;
-                    //    double a = subpair.Value;
-                    //    double b = twoTermFreq - a;
-                    //    double c = pattern2Freq[subpair.Key] - a;
-                    //    double d = N - (a + b + c);
+                    SortedDictionary<double, List<string>> sPatternDict = new SortedDictionary<double, List<string>>();
+                    int cntLowPatternLLR = 0;
+                    int totalPatternLLR = 0;
+                    foreach (KeyValuePair<string, int> subpair in pair.Value)
+                    {
+                        double N = totalSampleCnt;
+                        double a = subpair.Value;
+                        double b = twoTermFreq - a;
+                        double c = pattern2Freq[subpair.Key] - a;
+                        double d = N - (a + b + c);
 
-                    //    double llr2 = 2.0 * (a * Math.Log((a * N) / ((a + b) * (a + c))) +
-                    //    b * Math.Log((b * N) / ((a + b) * (b + d))) +
-                    //    c * Math.Log((c * N) / ((c + d) * (a + c))) +
-                    //    d * Math.Log((d * N) / ((c + d) * (b + d))));
 
-                    //    if (llr2 < 0)
-                    //    {
-                    //        continue;
-                    //    }
+                        if (N == 0 ||
+                            a ==  0 ||
+                            b == 0 ||
+                            c == 0 ||
+                            d == 0 ||
+                            a + b == 0 ||
+                            a + c == 0 ||
+                            b + d == 0 ||
+                            c + d == 0
+                            )
+                        {
+                            continue;
+                        }
 
-                    //    if (sPatternDict.ContainsKey(llr2) == false)
-                    //    {
-                    //        sPatternDict.Add(llr2, new List<string>());
-                    //    }
-                    //    sPatternDict[llr2].Add(subpair.Key);
-                    //}
+                        double llr2 = 2.0 * (a * Math.Log((a * N) / ((a + b) * (a + c))) +
+                        b * Math.Log((b * N) / ((a + b) * (b + d))) +
+                        c * Math.Log((c * N) / ((c + d) * (a + c))) +
+                        d * Math.Log((d * N) / ((c + d) * (b + d))));
 
-                    //foreach (KeyValuePair<double, List<string>> subpair in sPatternDict.Reverse())
-                    //{
-                    //    foreach (string item in subpair.Value)
-                    //    {
-                    //        sb.Append(item);
-                    //        sb.Append("\t");
-                    //        sb.Append(subpair.Key);
-                    //        sb.Append("\t");
-                    //    }
-                    //}
-                    //sortedResult[llr].Add(sb.ToString().Trim());
+                        totalPatternLLR++;
 
+                        if (llr2 < 200.0)
+                        {
+                            cntLowPatternLLR++;
+                            continue;
+                        }
+
+                        if (sPatternDict.ContainsKey(llr2) == false)
+                        {
+                            sPatternDict.Add(llr2, new List<string>());
+                        }
+                        sPatternDict[llr2].Add(subpair.Key);
+                    }
+
+                    if (sPatternDict.Count == 0)
+                    {
+                        //No high quality context pattern, ignore this synonym pair
+                        continue;
+                    }
+
+                    double rateLowPatternLLR = (double)(cntLowPatternLLR) / (double)(totalPatternLLR);
+                    sb.Append(rateLowPatternLLR);
+                    sb.Append("\t");
+                    sb.Append(totalPatternLLR);
+                    sb.Append("\t");
+
+                    foreach (KeyValuePair<double, List<string>> subpair in sPatternDict.Reverse())
+                    {
+                        foreach (string item in subpair.Value)
+                        {
+                            sb.Append(item);
+                            sb.Append("\t");
+                            sb.Append(subpair.Key);
+                            sb.Append("\t");
+                        }
+                    }
 
                     if (sortedResult.ContainsKey(llr) == false)
                     {

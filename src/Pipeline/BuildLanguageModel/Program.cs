@@ -18,7 +18,7 @@ namespace BuildLanguageModel
         //Load mapping file for term normalizing
         private static void LoadNormalizedMappingFile(string strFileName)
         {
-            Console.WriteLine("Loading term normalizing mapping file...");
+            Console.Write("Loading term normalizing mapping file...");
             termNormDict = new Dictionary<string, string>();
             StreamReader sr = new StreamReader(strFileName);
             while (sr.EndOfStream == false)
@@ -36,6 +36,7 @@ namespace BuildLanguageModel
                 }
             }
             sr.Close();
+            Console.WriteLine("Done.");
         }
 
         //Normalize given term
@@ -52,13 +53,14 @@ namespace BuildLanguageModel
 
         static void Main(string[] args)
         {
-            if (args.Length != 4)
+            if (args.Length != 5)
             {
-                Console.WriteLine("BuildLanguageModel.exe [lexical dictionary] [term normalizing mapping file] [input file] [output file]");
+                Console.WriteLine("BuildLanguageModel.exe [lexical dictionary] [lowest term frequency] [term normalizing mapping file] [input file] [output file]");
                 return;
             }
 
-            LoadNormalizedMappingFile(args[1]);
+            int minTermFreq = int.Parse(args[1]);
+            LoadNormalizedMappingFile(args[2]);
 
             wordseg = new WordSeg.WordSeg();
             //Load lexical dictionary
@@ -66,7 +68,9 @@ namespace BuildLanguageModel
             //Initialize word breaker's token instance
             wbTokens = wordseg.CreateTokens(1024);
 
-            StreamReader sr = new StreamReader(args[2], Encoding.UTF8);
+            Console.WriteLine("Loading raw corpus and counting unigram and bigram...");
+
+            StreamReader sr = new StreamReader(args[3], Encoding.UTF8);
             string strLine = null;
             BigDictionary<string, int> bigram = new BigDictionary<string, int>();
             BigDictionary<string, int> unigram = new BigDictionary<string, int>();
@@ -79,7 +83,13 @@ namespace BuildLanguageModel
                 string strQuery = items[0].ToLower().Trim();
                 int freq = int.Parse(items[2]);
                 queryCnt += freq;
+                
                 docCnt++;
+                if (docCnt % 100000 == 0)
+                {
+                    Console.Write("{0}...", docCnt);
+                }
+
                 HashSet<string> setTerm = new HashSet<string>();
 
                 //Break the given query
@@ -135,9 +145,10 @@ namespace BuildLanguageModel
                 }
             }
             sr.Close();
+            Console.WriteLine("Done.");
 
             //Save unigram data
-            string strUnigramFileName = args[3] + ".uni";
+            string strUnigramFileName = args[4] + ".uni";
             StreamWriter sw_unigramData = new StreamWriter(strUnigramFileName, false, Encoding.UTF8, 102400);
        
             //Build double array trie-tree key and value pairs
@@ -145,7 +156,7 @@ namespace BuildLanguageModel
             int da_unigram_cnt = 0;
             foreach (KeyValuePair<string, int> pair in unigram)
             {
-                if (unigramDF[pair.Key] > 1)
+                if (unigramDF[pair.Key] >= minTermFreq)
                 {
                     double idf = (double)docCnt / (double)(unigramDF[pair.Key]);
                     idf = Math.Log(idf, 2.0);
@@ -198,13 +209,13 @@ namespace BuildLanguageModel
             }
 
             //Save bigram data
-            string strBigramFileName = args[3] + ".bi";
+            string strBigramFileName = args[4] + ".bi";
             StreamWriter sw_bigramData = new StreamWriter(strBigramFileName, false, Encoding.UTF8, 102400);
             SortedDictionary<string, int> bigramDict_da = new SortedDictionary<string, int>(StringComparer.Ordinal);
             int da_bigram_cnt = 0;
             foreach (KeyValuePair<string, int> pair in bigram)
             {
-                if (pair.Value > 2)
+                if (pair.Value >= minTermFreq)
                 {
                     double mi = minMI;
                     if (miDict.ContainsKey(pair.Key) == true)

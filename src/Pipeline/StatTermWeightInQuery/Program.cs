@@ -174,7 +174,7 @@ namespace StatTermWeightInQuery
         {
             if (args.Length != 6)
             {
-                Console.WriteLine("StatTermWeightInQuery [Query_ClusterId_Freq FileName] [Query_Term_Weight FileName] [Min Query_ClusterId Frequency] [Min Cluster Size] [Word Breaker Lex Dictionary] [Normalize Mapping FileName]");
+                Console.WriteLine("StatTermWeightInQuery [input:query_clusterId_freq filename] [output:query_term_weight filename] [input:min query_clusterId frequency] [input:min cluster size] [input:word breaker lexical dictionary] [input:normalize mapping filename]");
                 return;
             }
 
@@ -194,18 +194,27 @@ namespace StatTermWeightInQuery
             {
                 strLine = strLine.ToLower().Trim();
                 string[] strArray = strLine.Split(new char[] { '\t' });
-                if (strArray.Length != 3)
+                if (strArray.Length < 3)
                 {
                     Console.WriteLine("Invalidated line: {0}", strLine);
                     continue;
                 }
 
-                //Construct query item instance
-                QueryItem item = new QueryItem
+                QueryItem item = null;
+                try
                 {
-                    strQuery = NormalizeQuery(strArray[0]),
-                    freq = int.Parse(strArray[2])
-                };
+                    //Construct query item instance
+                    item = new QueryItem
+                    {
+                        strQuery = NormalizeQuery(strArray[0]),
+                        freq = int.Parse(strArray[2])
+                    };
+                }
+                catch (SystemException err)
+                {
+                    Console.WriteLine("Invalidated line: {0}", strLine);
+                    continue;
+                }
 
                 if (item.freq >= MIN_QUERY_URL_PAIR_FREQUENCY)
                 {
