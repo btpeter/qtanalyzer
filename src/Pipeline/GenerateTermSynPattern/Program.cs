@@ -149,9 +149,9 @@ namespace GenerateTermSynPattern
 
         static void Main(string[] args)
         {
-            if (args.Length != 4)
+            if (args.Length != 3)
             {
-                Console.WriteLine("GenerateTermSynPattern.exe [input:word breaker lexical file] [input:query_clusterId_freq_clickweight file] [output:term_syn_pattern file] [output:bigram model]");
+                Console.WriteLine("GenerateTermSynPattern.exe [input:word breaker lexical file] [input:query_clusterId_freq_clickweight file] [output:term_syn_pattern file]");
                 return;
             }
 
@@ -183,11 +183,11 @@ namespace GenerateTermSynPattern
                 qi.freq = int.Parse(items[2]);
                 qi.clickweight = double.Parse(items[3]);
 
-                //Query url whose frequency or clickweight is too low will be ignored.
-                if (qi.clickweight < 5.0)
-                {
-                    continue;
-                }
+                ////Query url whose frequency or clickweight is too low will be ignored.
+                //if (qi.clickweight < 5.0)
+                //{
+                //    continue;
+                //}
 
                 if (strLastUrl == "")
                 {
@@ -218,12 +218,10 @@ namespace GenerateTermSynPattern
                 {
                     Console.WriteLine("Process {0} records...", recordCnt);
                     UpdateSaveTermSyn(args[2]);
-                    UpdateBigramContextFile(args[3]);
                 }
             }
 
             UpdateSaveTermSyn(args[2]);
-            UpdateBigramContextFile(args[3]);
 
             sr.Close();
         }
@@ -263,238 +261,7 @@ namespace GenerateTermSynPattern
             return llr;
         }
 
-        //Generate term and its context bigram
-        public static void GenerateBigram(out BigDictionary<string, int> leftBigramDict, out BigDictionary<string, int> rightBigramDict)
-        {
-            leftBigramDict = new BigDictionary<string, int>();
-            rightBigramDict = new BigDictionary<string, int>();
 
-            foreach (KeyValuePair<string, Dictionary<string, int>> pair in twoTerms2Pattern2Freq)
-            {
-                if (pair.Value.Count > 1)
-                {
-                    //For each context
-                    string[] terms = pair.Key.Split('\t');
-                    foreach (KeyValuePair<string, int> context in pair.Value)
-                    {
-                        int pos = context.Key.IndexOf(strSeparator);
-                        if (pos < 0)
-                        {
-                            Console.WriteLine("Invalidated context {0} in {1}", context.Key, pair.Key);
-                            continue;
-                        }
-
-                        string leftContext = context.Key.Substring(0, pos);
-                        string rightContext = "";
-                        if (pos + strSeparator.Length < context.Key.Length)
-                        {
-                            rightContext = context.Key.Substring(pos + strSeparator.Length);
-                        }
-
-                        //Generate left context
-                        wordseg.Segment(leftContext, tokens, false);
-                        int begin = 0, len = 0;
-                        string ctxTerm = null;
-                        if (tokens.tokenList.Count > 0)
-                        {
-                            begin = tokens.tokenList[tokens.tokenList.Count - 1].offset;
-                            len = tokens.tokenList[tokens.tokenList.Count - 1].len;
-                            ctxTerm = leftContext.Substring(begin, len);
-
-                            //Generate left-first term bigram
-                            string ctxLeftBigram = ctxTerm + "\t" + terms[0];
-                            if (leftBigramDict.ContainsKey(ctxLeftBigram) == false)
-                            {
-                                leftBigramDict.Add(ctxLeftBigram, 0);
-                            }
-                            leftBigramDict[ctxLeftBigram] += context.Value;
-
-                            //Generate left-second term bigram
-                            ctxLeftBigram = ctxTerm + "\t" + terms[1];
-                            if (leftBigramDict.ContainsKey(ctxLeftBigram) == false)
-                            {
-                                leftBigramDict.Add(ctxLeftBigram, 0);
-                            }
-                            leftBigramDict[ctxLeftBigram] += context.Value;
-                        }
-
-                        //Generate right context
-                        wordseg.Segment(rightContext, tokens, false);
-                        if (tokens.tokenList.Count > 0)
-                        {
-                            begin = tokens.tokenList[0].offset;
-                            len = tokens.tokenList[0].len;
-                            ctxTerm = rightContext.Substring(begin, len);
-
-                            string ctxRightBigram = terms[0] + "\t" + ctxTerm;
-                            if (rightBigramDict.ContainsKey(ctxRightBigram) == false)
-                            {
-                                rightBigramDict.Add(ctxRightBigram, 0);
-                            }
-                            rightBigramDict[ctxRightBigram] += context.Value;
-
-                            ctxRightBigram = terms[1] + "\t" + ctxTerm;
-                            if (rightBigramDict.ContainsKey(ctxRightBigram) == false)
-                            {
-                                rightBigramDict.Add(ctxRightBigram, 0);
-                            }
-                            rightBigramDict[ctxRightBigram] += context.Value;
-                        }
-                    }
-
-                }
-            }
-        }
-
-
-        public static void UpdateBigramContextFile(string strFileName)
-        {
-            StreamWriter sw = new StreamWriter(strFileName);
-
-            BigDictionary<string, int> leftBigramDict;
-            BigDictionary<string, int> rightBigramDict;
-
-            //Generate all terms bigram
-            GenerateBigram(out leftBigramDict, out rightBigramDict);
-
-            foreach (KeyValuePair<string, Dictionary<string, int>> pair in twoTerms2Pattern2Freq)
-            {
-                if (pair.Value.Count > 1)
-                {
-                    //For each context
-                    string[] terms = pair.Key.Split('\t');
-                    Dictionary<string, int> ctxLeftBigramDict = new Dictionary<string, int>();
-                    Dictionary<string, int> ctxRightBigramDict = new Dictionary<string, int>();
-
-                    foreach (KeyValuePair<string, int> context in pair.Value)
-                    {
-                        int pos = context.Key.IndexOf(strSeparator);
-                        if (pos < 0)
-                        {
-                            Console.WriteLine("Invalidated context {0} in {1}", context.Key, pair.Key);
-                            continue;
-                        }
-                        string leftContext = context.Key.Substring(0, pos);
-                        string rightContext = "";
-                        if (pos + strSeparator.Length < context.Key.Length)
-                        {
-                            rightContext = context.Key.Substring(pos + strSeparator.Length);
-                        }
-
-                        //Generate left context
-                        wordseg.Segment(leftContext, tokens, false);
-                        int begin = 0, len = 0;
-                        string ctxTerm = null;
-                        if (tokens.tokenList.Count > 0)
-                        {
-                            begin = tokens.tokenList[tokens.tokenList.Count - 1].offset;
-                            len = tokens.tokenList[tokens.tokenList.Count - 1].len;
-                            ctxTerm = leftContext.Substring(begin, len);
-
-                            //Generate left-first term bigram
-                            string ctxLeftBigram = ctxTerm + "\t" + terms[0];
-                            if (ctxLeftBigramDict.ContainsKey(ctxLeftBigram) == false)
-                            {
-                                ctxLeftBigramDict.Add(ctxLeftBigram, 0);
-                            }
-                            ctxLeftBigramDict[ctxLeftBigram] += context.Value;
-
-                            //Generate left-second term bigram
-                            ctxLeftBigram = ctxTerm + "\t" + terms[1];
-                            if (ctxLeftBigramDict.ContainsKey(ctxLeftBigram) == false)
-                            {
-                                ctxLeftBigramDict.Add(ctxLeftBigram, 0);
-                            }
-                            ctxLeftBigramDict[ctxLeftBigram] += context.Value;
-                        }
-
-                        //Generate right context
-                        wordseg.Segment(rightContext, tokens, false);
-                        if (tokens.tokenList.Count > 0)
-                        {
-                            begin = tokens.tokenList[0].offset;
-                            len = tokens.tokenList[0].len;
-                            ctxTerm = rightContext.Substring(begin, len);
-
-                            string ctxRightBigram = terms[0] + "\t" + ctxTerm;
-                            if (ctxRightBigramDict.ContainsKey(ctxRightBigram) == false)
-                            {
-                                ctxRightBigramDict.Add(ctxRightBigram, 0);
-                            }
-                            ctxRightBigramDict[ctxRightBigram] += context.Value;
-
-                            ctxRightBigram = terms[1] + "\t" + ctxTerm;
-                            if (ctxRightBigramDict.ContainsKey(ctxRightBigram) == false)
-                            {
-                                ctxRightBigramDict.Add(ctxRightBigram, 0);
-                            }
-                            ctxRightBigramDict[ctxRightBigram] += context.Value;
-                        }
-                    }
-
-                    //Write bigram data into file
-                    string[] biTerms = null;
-                    foreach (KeyValuePair<string, int> ctxLeftBigramPair in ctxLeftBigramDict)
-                    {
-                        if (leftBigramDict[ctxLeftBigramPair.Key] == 1)
-                        {
-                            continue;
-                        }
-
-                        double ratio = (double)(ctxLeftBigramPair.Value) / (double)(leftBigramDict[ctxLeftBigramPair.Key]);
-                        if (ratio < 0.80)
-                        {
-                            continue;
-                        }
-
-                        biTerms = ctxLeftBigramPair.Key.Split('\t');
-                        string pairTerm = null;
-
-                        if (biTerms[1] == terms[0])
-                        {
-                            pairTerm = terms[1];
-                        }
-                        else
-                        {
-                            pairTerm = terms[0];
-                        }
-
-                        sw.WriteLine("L\t{0}\t{1}\t{2}\t{3}", ctxLeftBigramPair.Key, pairTerm, ratio, leftBigramDict[ctxLeftBigramPair.Key]);
-                    }
-
-
-                    foreach (KeyValuePair<string, int> ctxRightBigramPair in ctxRightBigramDict)
-                    {
-                        if (rightBigramDict[ctxRightBigramPair.Key] == 1)
-                        {
-                            continue;
-                        }
-
-                        double ratio = (double)(ctxRightBigramPair.Value) / (double)(rightBigramDict[ctxRightBigramPair.Key]);
-                        if (ratio < 0.80)
-                        {
-                            continue;
-                        }
-
-                        biTerms = ctxRightBigramPair.Key.Split('\t');
-                        string pairTerm = null;
-
-                        if (biTerms[0] == terms[0])
-                        {
-                            pairTerm = terms[1];
-                        }
-                        else
-                        {
-                            pairTerm = terms[0];
-                        }
-
-                        sw.WriteLine("R\t{0}\t{1}\t{2}\t{3}", ctxRightBigramPair.Key, pairTerm, ratio, rightBigramDict[ctxRightBigramPair.Key]);
-                    }
-                }
-            }
-
-            sw.Close();
-        }
 
 
         public static void UpdateSaveTermSyn(string strFileName)
@@ -587,18 +354,18 @@ namespace GenerateTermSynPattern
                     sb.Append(rateLowPatternLLR);
                     sb.Append("\t");
                     sb.Append(totalPatternLLR);
-                    sb.Append("\t");
+                    //sb.Append("\t");
 
-                    foreach (KeyValuePair<double, List<string>> subpair in sPatternDict.Reverse())
-                    {
-                        foreach (string item in subpair.Value)
-                        {
-                            sb.Append(item);
-                            sb.Append("\t");
-                            sb.Append(subpair.Key);
-                            sb.Append("\t");
-                        }
-                    }
+                    //foreach (KeyValuePair<double, List<string>> subpair in sPatternDict.Reverse())
+                    //{
+                    //    foreach (string item in subpair.Value)
+                    //    {
+                    //        sb.Append(item);
+                    //        sb.Append("\t");
+                    //        sb.Append(subpair.Key);
+                    //        sb.Append("\t");
+                    //    }
+                    //}
 
                     if (sortedResult.ContainsKey(llr) == false)
                     {

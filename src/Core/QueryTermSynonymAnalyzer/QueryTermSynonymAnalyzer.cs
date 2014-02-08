@@ -4,171 +4,187 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using WordSeg;
+//using LMDecoder;
+using RNNLM;
 
 namespace QueryTermSynonymAnalyzer
 {
     public class SynContextSet
     {
         public double llr;
-        public Dictionary<string, int> featureSpace;
+        public string strTerm;
+    }
 
-        public SynContextSet()
-        {
-            llr = 0.0;
-            featureSpace = new Dictionary<string, int>();
-        }
+    public class SynResult
+    {
+        public string strTerm;
+        public double lmScore;
+        public double lmScore_rnn;
+        public double llr;
     }
 
     public class QueryTermSynonymAnalyzer
     {
-        Dictionary<string, Dictionary<string, SynContextSet>> termpair2featureSet = new Dictionary<string, Dictionary<string, SynContextSet>>();
+        //Synonym dictionary
+        Dictionary<string, List<SynContextSet>> synPair;
+
+        //Language model based on RNN
+        RNNLM.LMDecoder lmDecoder_rnn;
+
+        //Language model based on ngram
+        int lmOrder;
+        LMDecoder.LMDecoder lmDecoder;
+
+        //Word breaker
         WordSeg.WordSeg wordseg;
         WordSeg.Tokens wbTokens;
 
-
-        public QueryTermSynonymAnalyzer(string strLexicalFileName, string strCorpusFileName)
+        public QueryTermSynonymAnalyzer(string strLexicalFileName, string strSynFileName, string strLMFileName)
         {
             InitializeWordSeg(strLexicalFileName);
-            LoadFeatureSet(strCorpusFileName);
+            LoadSynonym(strSynFileName);
+            LoadLanguageModel(strLMFileName);
         }
 
-        private List<string> GetTermSynonym(string strTerm, string strPreContext, string strPostContext)
+        private void LoadSynonym(string strSynFileName)
         {
-            if (termpair2featureSet.ContainsKey(strTerm) == false)
+            StreamReader sr = new StreamReader(strSynFileName);
+            string strLine = null;
+            synPair = new Dictionary<string, List<SynContextSet>>();
+            while ((strLine = sr.ReadLine()) != null)
             {
-                return new List<string>();
-            }
-
-            Dictionary<string, SynContextSet> syn2feature = termpair2featureSet[strTerm];
-            //Generate feature set
-            Dictionary<string, int> featureDict = new Dictionary<string, int>();
-            if (strPreContext.Length > 0)
-            {
-                wbTokens.Clear();
-                wordseg.Segment(strPreContext, wbTokens, false);
-                int offset = wbTokens.tokenList.Count;
-                foreach (Token token in wbTokens.tokenList)
-                {
-                    string strFeature = token.strTerm; // +"_B"; // +offset.ToString();
-                    if (featureDict.ContainsKey(strFeature) == false)
-                    {
-                        featureDict.Add(strFeature, 1);
-                    }
-                    else
-                    {
-                        featureDict[strFeature]++;
-                    }
-                    offset--;
-                }
-            }
-
-            if (strPostContext.Length > 0)
-            {
-                wbTokens.Clear();
-                wordseg.Segment(strPostContext, wbTokens, false);
-                for (int j = 0; j < wbTokens.tokenList.Count; j++)
-                {
-                    string strFeature = wbTokens.tokenList[j].strTerm; // +"_P"; // +(j + 1).ToString();
-                    if (featureDict.ContainsKey(strFeature) == false)
-                    {
-                        featureDict.Add(strFeature, 1);
-                    }
-                    else
-                    {
-                        featureDict[strFeature]++;
-                    }
-                }
-            }
-
-            SortedDictionary<double, List<string>> sdict = new SortedDictionary<double, List<string>>();
-            foreach (KeyValuePair<string, SynContextSet> pair in syn2feature)
-            {
-                string strSynTerm = pair.Key;
-                double synLLR = pair.Value.llr;
-                Dictionary<string, int> featureSpace = pair.Value.featureSpace;
-
-                int matchCnt = 0;
-                foreach (KeyValuePair<string, int> subpair in featureDict)
-                {
-                    if (featureSpace.ContainsKey(subpair.Key) == true)
-                    {
-                        matchCnt++;
-                    }
-                }
-                double matchRate = (double)matchCnt / (double)featureDict.Count;
-                if (matchRate > 0 || synLLR > 10.0)
-                {
-                    if (sdict.ContainsKey(matchRate) == false)
-                    {
-                        sdict.Add(matchRate, new List<string>());
-                    }
-                    sdict[matchRate].Add(strSynTerm + "_" + synLLR.ToString());
-                }
-            }
-
-            List<string> rstList = new List<string>();
-            foreach (KeyValuePair<double, List<string>> pair in sdict.Reverse())
-            {
-                foreach (string item in pair.Value)
-                {
-                    rstList.Add(item + "_" + pair.Key);
-                }
-            }
-
-            return rstList;
-        }
-
-        public Dictionary<string, List<string>> GetSynonym(string strQuery, int begin, int len)
-        {
-            Dictionary<string, List<string>> rstDict = new Dictionary<string, List<string>>();
-            string strPreContext = strQuery.Substring(0, begin);
-            string strPostContext = strQuery.Substring(begin + len);
-            string strCoreTerm = strQuery.Substring(begin, len);
-
-            List<string> rstList = GetTermSynonym(strCoreTerm, strPreContext, strPostContext);
-            if (rstList.Count > 1)
-            {
-                rstDict.Add(strCoreTerm, rstList);
-                return rstDict;
-            }
-
-            WordSeg.Tokens wbTerms;
-            wbTerms = wordseg.CreateTokens(1024);
-            wordseg.Segment(strCoreTerm, wbTerms, false);
-
-            for (int i = 0; i < wbTerms.tokenList.Count; i++)
-            {
-                string strTerm = wbTerms.tokenList[i].strTerm;
-                if (termpair2featureSet.ContainsKey(strTerm) == false)
+                string[] items = strLine.Split('\t');
+                string strTerm1 = items[0];
+                string strTerm2 = items[1];
+                double llr = float.Parse(items[2]);
+                if (llr < 1000.0)
                 {
                     continue;
                 }
 
-                strPreContext = strQuery.Substring(0, begin);
-                strPostContext = strQuery.Substring(begin + len);
-
-                for (int j = 0; j < i; j++)
+                SynContextSet synCtx = new SynContextSet();
+                synCtx.strTerm = strTerm2;
+                synCtx.llr = llr;
+                if (synPair.ContainsKey(strTerm1) == false)
                 {
-                    strPreContext += wbTerms.tokenList[j].strTerm;
+                    synPair.Add(strTerm1, new List<SynContextSet>());
                 }
 
-                for (int j = i + 1; j < wbTerms.tokenList.Count; j++)
+                if (synPair[strTerm1].Count < 10)
                 {
-                    strPostContext = wbTerms.tokenList[j].strTerm + strPostContext;
+                    synPair[strTerm1].Add(synCtx);
                 }
 
-                rstList = GetTermSynonym(strTerm, strPreContext, strPostContext);
-                if (rstDict.ContainsKey(strTerm) == false)
+                synCtx = new SynContextSet();
+                synCtx.strTerm = strTerm1;
+                synCtx.llr = llr;
+                if (synPair.ContainsKey(strTerm2) == false)
                 {
-                    rstDict.Add(strTerm, rstList);
+                    synPair.Add(strTerm2, new List<SynContextSet>());
+                }
+
+                if (synPair[strTerm2].Count < 10)
+                {
+                    synPair[strTerm2].Add(synCtx);
                 }
             }
+            sr.Close();
 
-            return rstDict;
+        }
+
+        private void LoadLanguageModelNGram(string strLMFileName)
+        {
+            lmDecoder = new LMDecoder.LMDecoder();
+            lmDecoder.LoadLM(strLMFileName);
+            lmOrder = 4;
+        }
+
+        private void LoadLanguageModelRNN(string strLMFileName)
+        {
+            float regularization = 0.0000001f;
+            float dynamic = 0;
+            lmDecoder_rnn = new RNNLM.LMDecoder();
+            lmDecoder_rnn.setLambda(0.5);
+            lmDecoder_rnn.setRegularization(regularization);
+            lmDecoder_rnn.setDynamic(dynamic);
+            lmDecoder_rnn.LoadLM(strLMFileName);
+        }
+
+        private void LoadLanguageModel(string strLMFileName)
+        {
+            //Load language model based on ngram
+            LoadLanguageModelNGram(strLMFileName);
+
+            //Load language model based on RNN
+            LoadLanguageModelRNN("chsSentLM");
+        }
+
+        public static int CompareLMResult(SynResult l, SynResult r)
+        {
+            //return l.lmScore_rnn.CompareTo(r.lmScore_rnn);
+            return l.lmScore.CompareTo(r.lmScore);
+        }
+
+        public List<SynResult> GetSynonym(string strQuery, int begin, int len)
+        {
+            List<SynResult> synRstList = new List<SynResult>();
+
+            //Get candidate synonym term
+            string strTerm = strQuery.Substring(begin, len);
+           
+            //Word breaking strQuery
+            string strWBQuery = WordSegment(strQuery);
+            //Get sentence probability by language model
+
+            //Call RNN language model
+            RnnLMResult lmResult_rnn = lmDecoder_rnn.GetSentProb(strWBQuery);
+            //Call Ngram language model
+            LMDecoder.LMResult lmResult = lmDecoder.GetSentProb(strWBQuery, lmOrder);
+
+
+            SynResult synRst = new SynResult();
+            synRst.strTerm = strTerm;
+            synRst.lmScore = (int)(lmResult.perplexity / 1.0);
+            synRst.lmScore_rnn = (int)(lmResult_rnn.perplexity / 1.0);
+            synRst.llr = -1.0;
+            synRstList.Add(synRst);
+
+            if (synPair.ContainsKey(strTerm) == false)
+            {
+                return synRstList;
+            }
+
+            string strLCtx = strQuery.Substring(0, begin);
+            string strRCtx = strQuery.Substring(begin + len);
+            foreach (SynContextSet ctx in synPair[strTerm])
+            {
+                //Replace the term with its synonym term
+                string strText = strLCtx + ctx.strTerm + strRCtx;
+                //Word breaking strQuery
+                strWBQuery = WordSegment(strText);
+                //Get sentence probability by language model
+                //Call RNN language model
+                lmResult_rnn = lmDecoder_rnn.GetSentProb(strWBQuery);
+                //Call ngram language model
+                lmResult = lmDecoder.GetSentProb(strWBQuery, lmOrder);
+
+
+                synRst = new SynResult();
+                synRst.strTerm = ctx.strTerm;
+                synRst.lmScore = (int)(lmResult.perplexity / 1.0);
+                synRst.lmScore_rnn = (int)(lmResult_rnn.perplexity / 1.0);
+                synRst.llr = ctx.llr;
+                synRstList.Add(synRst);
+
+            }
+
+            synRstList.Sort(CompareLMResult);
+
+            return synRstList;
         }
 
 
-        public void InitializeWordSeg(string strLexicalFileName)
+        private void InitializeWordSeg(string strLexicalFileName)
         {
             wordseg = new WordSeg.WordSeg();
             //Load lexical dictionary
@@ -177,98 +193,25 @@ namespace QueryTermSynonymAnalyzer
             wbTokens = wordseg.CreateTokens(1024);
         }
 
-        public void LoadFeatureSet(string strCorpusFileName)
+        private string WordSegment(string strText)
         {
-            StreamReader sr = new StreamReader(strCorpusFileName, Encoding.UTF8);
-            string strLine = "";
-            while ((strLine = sr.ReadLine()) != null)
+            //Segment text by lexical dictionary
+            wordseg.Segment(strText, wbTokens, false);
+            StringBuilder sb = new StringBuilder();
+            //Parse each broken token
+            for (int i = 0; i < wbTokens.tokenList.Count; i++)
             {
-                string[] items = strLine.Split('\t');
-                if (items.Length % 2 == 0)
+                string strTerm = wbTokens.tokenList[i].strTerm.Trim();
+                if (strTerm.Length > 0)
                 {
-                    Console.WriteLine("{0} is invalidated, skip it.", strLine);
-                    continue;
+                    sb.Append(strTerm);
+                    sb.Append(" ");
                 }
-                double llr = double.Parse(items[2]);
-                if (llr < 100.0)
-                {
-                    continue;
-                }
-
-                Dictionary<string, int> featureDict = new Dictionary<string, int>();
-                string[] sep = new string[1];
-                sep[0] = "[X]";
-                for (int i = 3; i < items.Length; i += 2)
-                {
-                    string strContext = items[i];
-                    double score = double.Parse(items[i + 1]);
-                    int pos = strContext.IndexOf("[X]");
-                    string strPreContext = strContext.Substring(0, pos);
-                    string strPostContext = strContext.Substring(pos + 3);
-
-                    if (strPreContext.Length > 0)
-                    {
-                        wbTokens.Clear();
-                        wordseg.Segment(strPreContext, wbTokens, false);
-                        int offset = wbTokens.tokenList.Count;
-                        foreach (Token token in wbTokens.tokenList)
-                        {
-                            string strFeature = token.strTerm; // +"_B"; // +offset.ToString();
-                            if (featureDict.ContainsKey(strFeature) == false)
-                            {
-                                featureDict.Add(strFeature, 1);
-                            }
-                            else
-                            {
-                                featureDict[strFeature]++;
-                            }
-                            offset--;
-                        }
-                    }
-
-                    if (strPostContext.Length > 0)
-                    {
-                        wbTokens.Clear();
-                        wordseg.Segment(strPostContext, wbTokens, false);
-                        for (int j = 0; j < wbTokens.tokenList.Count; j++)
-                        {
-                            string strFeature = wbTokens.tokenList[j].strTerm; // +"_P"; // +(j + 1).ToString();
-                            if (featureDict.ContainsKey(strFeature) == false)
-                            {
-                                featureDict.Add(strFeature, 1);
-                            }
-                            else
-                            {
-                                featureDict[strFeature]++;
-                            }
-                        }
-                    }
-                }
-
-                SynContextSet synConSet = new SynContextSet();
-                synConSet.featureSpace = featureDict;
-                synConSet.llr = llr;
-
-                if (termpair2featureSet.ContainsKey(items[0]) == false)
-                {
-                    termpair2featureSet.Add(items[0], new Dictionary<string, SynContextSet>());
-                }
-                if (termpair2featureSet[items[0]].ContainsKey(items[1]) == false)
-                {
-                    termpair2featureSet[items[0]].Add(items[1], synConSet);
-                }
-
-                if (termpair2featureSet.ContainsKey(items[1]) == false)
-                {
-                    termpair2featureSet.Add(items[1], new Dictionary<string, SynContextSet>());
-                }
-                if (termpair2featureSet[items[1]].ContainsKey(items[0]) == false)
-                {
-                    termpair2featureSet[items[1]].Add(items[0], synConSet);
-                }
-
             }
-            sr.Close();
+
+            return sb.ToString().Trim();
         }
+        
+
     }
 }

@@ -19,11 +19,11 @@ namespace QueryTermWeightAnalyzer
         public float rankingscore;
     }
 
-    public class Bigram
-    {
-        public long freq;
-        public double mi;
-    }
+    //public class Bigram
+    //{
+    //    public long freq;
+    //    public double mi;
+    //}
 
     public class Unigram
     {
@@ -69,9 +69,9 @@ namespace QueryTermWeightAnalyzer
 
         //Language models
         DoubleArrayTrieSearch unigram_da;
-        DoubleArrayTrieSearch bigram_da;
+  //      DoubleArrayTrieSearch bigram_da;
         List<Unigram> unigramList;
-        List<Bigram> bigramList;
+      //  List<Bigram> bigramList;
         HashSet<string> setPunct;
         double maxIDF = 0.0;
 
@@ -176,10 +176,10 @@ namespace QueryTermWeightAnalyzer
             featureList.Add(new IsEndTermFeature());
             featureList.Add(new UnigramTFFeature());
             featureList.Add(new UnigramIDFFeature());
-            featureList.Add(new BigramInLeftFeature());
-            featureList.Add(new BigramInRightFeature());
-            featureList.Add(new PMIInLeftFeature());
-            featureList.Add(new PMIInRightFeature());
+            //featureList.Add(new BigramInLeftFeature());
+            //featureList.Add(new BigramInRightFeature());
+            //featureList.Add(new PMIInLeftFeature());
+            //featureList.Add(new PMIInRightFeature());
             featureList.Add(new TermRank0PercentFeature());
             featureList.Add(new TermRank1PercentFeature());
             featureList.Add(new TermRank2PercentFeature());
@@ -224,27 +224,27 @@ namespace QueryTermWeightAnalyzer
             return true;
         }
 
-        //Load Bigram data from DART file
-        private bool LoadBigram(string strFileName)
-        {
-            bigram_da = new DoubleArrayTrieSearch();
-            bigram_da.Load(strFileName + ".da");
-            bigramList = new List<Bigram>();
-            StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
-            string strLine = null;
-            while ((strLine = sr.ReadLine()) != null)
-            {
-                string[] items = strLine.Split('\t');
-                Bigram bigram = new Bigram();
-                bigram.freq = long.Parse(items[0]);
-                bigram.mi = double.Parse(items[1]);
+        ////Load Bigram data from DART file
+        //private bool LoadBigram(string strFileName)
+        //{
+        //    bigram_da = new DoubleArrayTrieSearch();
+        //    bigram_da.Load(strFileName + ".da");
+        //    bigramList = new List<Bigram>();
+        //    StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
+        //    string strLine = null;
+        //    while ((strLine = sr.ReadLine()) != null)
+        //    {
+        //        string[] items = strLine.Split('\t');
+        //        Bigram bigram = new Bigram();
+        //        bigram.freq = long.Parse(items[0]);
+        //        bigram.mi = double.Parse(items[1]);
 
-                bigramList.Add(bigram);
-            }
-            sr.Close();
+        //        bigramList.Add(bigram);
+        //    }
+        //    sr.Close();
 
-            return true;
-        }
+        //    return true;
+        //}
 
         //Load ini file items
         private Dictionary<string, string> LoadConfFile(string strConfFileName)
@@ -385,19 +385,19 @@ namespace QueryTermWeightAnalyzer
                 return false;
             }
 
-            //Load bigram data
-            if (confDict.ContainsKey(KEY_BIGRAM_FILE_NAME.ToLower()) == true)
-            {
-                if (LoadBigram(confDict[KEY_BIGRAM_FILE_NAME.ToLower()]) == false)
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                Console.WriteLine("Failed to find key {0}", KEY_BIGRAM_FILE_NAME);
-                return false;
-            }
+            ////Load bigram data
+            //if (confDict.ContainsKey(KEY_BIGRAM_FILE_NAME.ToLower()) == true)
+            //{
+            //    if (LoadBigram(confDict[KEY_BIGRAM_FILE_NAME.ToLower()]) == false)
+            //    {
+            //        return false;
+            //    }
+            //}
+            //else
+            //{
+            //    Console.WriteLine("Failed to find key {0}", KEY_BIGRAM_FILE_NAME);
+            //    return false;
+            //}
 
             //Load term important level percent data
             if (confDict.ContainsKey(KEY_RANKPERCENT_FILE_NAME.ToLower()) == true)
@@ -708,9 +708,9 @@ namespace QueryTermWeightAnalyzer
             FeatureContext context = new FeatureContext();
             context.tknList = tknList;
             context.unigram_da = unigram_da;
-            context.bigram_da = bigram_da;
+      //      context.bigram_da = bigram_da;
             context.unigramList = unigramList;
-            context.bigramList = bigramList;
+   //         context.bigramList = bigramList;
             context.setPunct = setPunct;
             context.maxIDF = maxIDF;
 
