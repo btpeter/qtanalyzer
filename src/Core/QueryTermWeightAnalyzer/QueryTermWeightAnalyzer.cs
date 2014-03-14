@@ -7,6 +7,7 @@ using AdvUtils;
 using WordSeg;
 using CRFSharp;
 using CRFSharpWrapper;
+//using LMDecoder;
 using QueryTermWeightAnalyzer.Features;
 using StochasticGradientBoost;
 
@@ -19,16 +20,8 @@ namespace QueryTermWeightAnalyzer
         public float rankingscore;
     }
 
-    //public class Bigram
-    //{
-    //    public long freq;
-    //    public double mi;
-    //}
-
-    public class Unigram
+    public class RankXDist
     {
-        public long freq;
-        public double idf;
         public double pRank0;
         public double pRank1;
         public double pRank2;
@@ -41,14 +34,13 @@ namespace QueryTermWeightAnalyzer
         //Key items in configuration file
         const string KEY_LEXICAL_DICT_FILE_NAME = "LexicalDictFileName";
         const string KEY_MODEL_FILE_NAME = "ModelFileName";
-        const string KEY_UNIGRAM_FILE_NAME = "UnigramFileName";
-        const string KEY_BIGRAM_FILE_NAME = "BigramFileName";
         const string KEY_RANKPERCENT_FILE_NAME = "RankPercentFileName";
         const string KEY_RANKMODEL_FILE_NAME = "RankingModelFileName";
         const string KEY_ACTIVEFEATURE_FILE_NAME = "ActiveFeatureFileName";
         const string KEY_PUNCT_DICT_FILE_NAME = "PunctDictFileName";
         const string KEY_NORMALIZED_TERM_FILE_NAME = "NormalizedTermFileName";
         const string KEY_RUN_RANKER_MODEL = "RunRankerModel";
+        const string KEY_LANGUAGE_MODEL_FILE_NAME = "LanguageModelFileName";
   
         //Run ranker model
         bool bRunRankerModel = true;
@@ -68,12 +60,9 @@ namespace QueryTermWeightAnalyzer
         ModelFeatureGenerator featureGenerator;
 
         //Language models
-        DoubleArrayTrieSearch unigram_da;
-  //      DoubleArrayTrieSearch bigram_da;
-        List<Unigram> unigramList;
-      //  List<Bigram> bigramList;
+        LMDecoder.KNDecoder lmDecoder;
+        Dictionary<string, RankXDist> term2rankDist;
         HashSet<string> setPunct;
-        double maxIDF = 0.0;
 
         //feature list
         List<IFeature> featureList;
@@ -83,6 +72,12 @@ namespace QueryTermWeightAnalyzer
 
         //Term normalizing mapping
         Dictionary<string, string> termNormDict;
+
+        private void LoadLanguageModel(string strLMFileName)
+        {
+            lmDecoder = new LMDecoder.KNDecoder();
+            lmDecoder.LoadLM(strLMFileName);
+        }
 
         private void LoadPunctDict(string strFileName)
         {
@@ -126,41 +121,45 @@ namespace QueryTermWeightAnalyzer
         private void LoadRankPercent(string strFileName)
         {
             StreamReader sr = new StreamReader(strFileName);
+            term2rankDist = new Dictionary<string, RankXDist>();
             while (sr.EndOfStream == false)
             {
+                //Format:
+                //term \t rank0 % \t rank1 % \t rank2 % \t rank3 % \t rank4 %
                 string strLine = sr.ReadLine();
                 string[] items = strLine.Split('\t');
+                string strTerm = items[0];
 
-                int idx = unigram_da.SearchByPerfectMatch(items[0]);
-                if (idx >= 0)
+                if (items[1] == "NaN")
                 {
-                    if (items[1] == "NaN")
-                    {
-                        items[1] = "0.0";
-                    }
-                    if (items[2] == "NaN")
-                    {
-                        items[2] = "0.0";
-                    }
-                    if (items[3] == "NaN")
-                    {
-                        items[3] = "0.0";
-                    }
-                    if (items[4] == "NaN")
-                    {
-                        items[4] = "0.0";
-                    }
-                    if (items[5] == "NaN")
-                    {
-                        items[5] = "0.0";
-                    }
-
-                    unigramList[idx].pRank0 = double.Parse(items[1]);
-                    unigramList[idx].pRank1 = double.Parse(items[2]);
-                    unigramList[idx].pRank2 = double.Parse(items[3]);
-                    unigramList[idx].pRank3 = double.Parse(items[4]);
-                    unigramList[idx].pRank4 = double.Parse(items[5]);
+                    items[1] = "0.0";
                 }
+                if (items[2] == "NaN")
+                {
+                    items[2] = "0.0";
+                }
+                if (items[3] == "NaN")
+                {
+                    items[3] = "0.0";
+                }
+                if (items[4] == "NaN")
+                {
+                    items[4] = "0.0";
+                }
+                if (items[5] == "NaN")
+                {
+                    items[5] = "0.0";
+                }
+
+                RankXDist dist = new RankXDist();
+                dist.pRank0 = double.Parse(items[1]);
+                dist.pRank1 = double.Parse(items[2]);
+                dist.pRank2 = double.Parse(items[3]);
+                dist.pRank3 = double.Parse(items[4]);
+                dist.pRank4 = double.Parse(items[5]);
+
+                term2rankDist.Add(strTerm, dist);
+
             }
             sr.Close();
         }
@@ -170,16 +169,11 @@ namespace QueryTermWeightAnalyzer
         {
             List<IFeature> featureList = new List<IFeature>();
             featureList.Add(new WordFormationFeature());
+            featureList.Add(new LanguageModelFeature());
             featureList.Add(new TermLengthFeature());
             featureList.Add(new TermOffsetFeature());
             featureList.Add(new IsBeginTermFeature());
             featureList.Add(new IsEndTermFeature());
-            featureList.Add(new UnigramTFFeature());
-            featureList.Add(new UnigramIDFFeature());
-            //featureList.Add(new BigramInLeftFeature());
-            //featureList.Add(new BigramInRightFeature());
-            //featureList.Add(new PMIInLeftFeature());
-            //featureList.Add(new PMIInRightFeature());
             featureList.Add(new TermRank0PercentFeature());
             featureList.Add(new TermRank1PercentFeature());
             featureList.Add(new TermRank2PercentFeature());
@@ -190,62 +184,7 @@ namespace QueryTermWeightAnalyzer
             return featureList;
         }
 
-        //Load unigram data from DART file
-        private bool LoadUnigram(string strFileName)
-        {
-            unigram_da = new DoubleArrayTrieSearch();
-            unigram_da.Load(strFileName + ".da");
-            unigramList = new List<Unigram>();
-            StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
-            string strLine = null;
-            while ((strLine = sr.ReadLine()) != null)
-            {
-                string[] items = strLine.Split('\t');
-
-                Unigram unigram = new Unigram();
-                unigram.freq = long.Parse(items[0]);
-                unigram.idf = double.Parse(items[1]);
-                unigram.pRank0 = -1;
-                unigram.pRank1 = -1;
-                unigram.pRank2 = -1;
-                unigram.pRank3 = -1;
-                unigram.pRank4 = -1;
-
-                unigramList.Add(unigram);
-
-                //Find the max IDF value from unigram set
-                if (unigram.idf > maxIDF)
-                {
-                    maxIDF = unigram.idf;
-                }
-            }
-            sr.Close();
-
-            return true;
-        }
-
-        ////Load Bigram data from DART file
-        //private bool LoadBigram(string strFileName)
-        //{
-        //    bigram_da = new DoubleArrayTrieSearch();
-        //    bigram_da.Load(strFileName + ".da");
-        //    bigramList = new List<Bigram>();
-        //    StreamReader sr = new StreamReader(strFileName, Encoding.UTF8);
-        //    string strLine = null;
-        //    while ((strLine = sr.ReadLine()) != null)
-        //    {
-        //        string[] items = strLine.Split('\t');
-        //        Bigram bigram = new Bigram();
-        //        bigram.freq = long.Parse(items[0]);
-        //        bigram.mi = double.Parse(items[1]);
-
-        //        bigramList.Add(bigram);
-        //    }
-        //    sr.Close();
-
-        //    return true;
-        //}
-
+      
         //Load ini file items
         private Dictionary<string, string> LoadConfFile(string strConfFileName)
         {
@@ -267,14 +206,13 @@ namespace QueryTermWeightAnalyzer
 
                 if (items[0] != KEY_LEXICAL_DICT_FILE_NAME.ToLower() &&
                     items[0] != KEY_MODEL_FILE_NAME.ToLower() &&
-                    items[0] != KEY_UNIGRAM_FILE_NAME.ToLower() &&
-                    items[0] != KEY_BIGRAM_FILE_NAME.ToLower() &&
                     items[0] != KEY_RANKPERCENT_FILE_NAME.ToLower() &&
                     items[0] != KEY_RANKMODEL_FILE_NAME.ToLower() &&
                     items[0] != KEY_ACTIVEFEATURE_FILE_NAME.ToLower() &&
                     items[0] != KEY_PUNCT_DICT_FILE_NAME.ToLower() &&
                     items[0] != KEY_NORMALIZED_TERM_FILE_NAME.ToLower() &&
-                    items[0] != KEY_RUN_RANKER_MODEL.ToLower())
+                    items[0] != KEY_RUN_RANKER_MODEL.ToLower() &&
+                    items[0] != KEY_LANGUAGE_MODEL_FILE_NAME.ToLower())
                 {
                     Console.WriteLine("{0} is invalidated item", strLine);
                     return null;
@@ -370,34 +308,17 @@ namespace QueryTermWeightAnalyzer
                 return false;
             }
 
+
             //Load language model
-            //Load unigram data
-            if (confDict.ContainsKey(KEY_UNIGRAM_FILE_NAME.ToLower()) == true)
+            if (confDict.ContainsKey(KEY_LANGUAGE_MODEL_FILE_NAME.ToLower()) == true)
             {
-                if (LoadUnigram(confDict[KEY_UNIGRAM_FILE_NAME.ToLower()]) == false)
-                {
-                    return false;
-                }
+                LoadLanguageModel(confDict[KEY_LANGUAGE_MODEL_FILE_NAME.ToLower()]);
             }
             else
             {
-                Console.WriteLine("Failed to find key {0}", KEY_UNIGRAM_FILE_NAME);
+                Console.WriteLine("Failed to find key {0}", KEY_LANGUAGE_MODEL_FILE_NAME);
                 return false;
             }
-
-            ////Load bigram data
-            //if (confDict.ContainsKey(KEY_BIGRAM_FILE_NAME.ToLower()) == true)
-            //{
-            //    if (LoadBigram(confDict[KEY_BIGRAM_FILE_NAME.ToLower()]) == false)
-            //    {
-            //        return false;
-            //    }
-            //}
-            //else
-            //{
-            //    Console.WriteLine("Failed to find key {0}", KEY_BIGRAM_FILE_NAME);
-            //    return false;
-            //}
 
             //Load term important level percent data
             if (confDict.ContainsKey(KEY_RANKPERCENT_FILE_NAME.ToLower()) == true)
@@ -707,12 +628,9 @@ namespace QueryTermWeightAnalyzer
         {
             FeatureContext context = new FeatureContext();
             context.tknList = tknList;
-            context.unigram_da = unigram_da;
-      //      context.bigram_da = bigram_da;
-            context.unigramList = unigramList;
-   //         context.bigramList = bigramList;
+            context.term2rankDist = term2rankDist;
             context.setPunct = setPunct;
-            context.maxIDF = maxIDF;
+            context.lmDecoder = lmDecoder;
 
             return context;
         }

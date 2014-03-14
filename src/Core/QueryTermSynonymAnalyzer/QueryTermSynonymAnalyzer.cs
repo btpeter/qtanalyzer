@@ -4,8 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using WordSeg;
-//using LMDecoder;
-using RNNLM;
+using LMDecoder;
 
 namespace QueryTermSynonymAnalyzer
 {
@@ -29,11 +28,11 @@ namespace QueryTermSynonymAnalyzer
         Dictionary<string, List<SynContextSet>> synPair;
 
         //Language model based on RNN
-        RNNLM.LMDecoder lmDecoder_rnn;
+        RNNDecoder lmDecoder_rnn;
 
         //Language model based on ngram
         int lmOrder;
-        LMDecoder.LMDecoder lmDecoder;
+        KNDecoder lmDecoder;
 
         //Word breaker
         WordSeg.WordSeg wordseg;
@@ -94,7 +93,7 @@ namespace QueryTermSynonymAnalyzer
 
         private void LoadLanguageModelNGram(string strLMFileName)
         {
-            lmDecoder = new LMDecoder.LMDecoder();
+            lmDecoder = new LMDecoder.KNDecoder();
             lmDecoder.LoadLM(strLMFileName);
             lmOrder = 4;
         }
@@ -103,7 +102,7 @@ namespace QueryTermSynonymAnalyzer
         {
             float regularization = 0.0000001f;
             float dynamic = 0;
-            lmDecoder_rnn = new RNNLM.LMDecoder();
+            lmDecoder_rnn = new RNNDecoder();
             lmDecoder_rnn.setLambda(0.5);
             lmDecoder_rnn.setRegularization(regularization);
             lmDecoder_rnn.setDynamic(dynamic);

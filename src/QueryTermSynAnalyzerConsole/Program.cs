@@ -10,7 +10,7 @@ namespace QueryTermSynAnalyzerConsole
     {
         static void Main(string[] args)
         {
-            QueryTermSynonymAnalyzer.QueryTermSynonymAnalyzer qts = new QueryTermSynonymAnalyzer.QueryTermSynonymAnalyzer("LexicalDict_zh-cn_empty.txt", "term_syn_pattern.txt", "model_zh-cn_ngram_5");
+            QueryTermSynonymAnalyzer.QueryTermSynonymAnalyzer qts = new QueryTermSynonymAnalyzer.QueryTermSynonymAnalyzer("LexicalDict_zh-cn_empty.txt", "term_syn_pattern.txt", "LM_zhcn_ngram_4");
 
             Console.WriteLine("Ready...");
             while (true)
