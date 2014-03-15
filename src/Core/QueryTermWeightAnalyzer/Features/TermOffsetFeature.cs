@@ -12,9 +12,9 @@ namespace QueryTermWeightAnalyzer.Features
             return "TermOffset";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
-            return context.index.ToString();
+            return context.index;
         }
     }
 }

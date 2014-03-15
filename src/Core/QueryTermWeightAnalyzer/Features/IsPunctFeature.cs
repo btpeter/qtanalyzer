@@ -12,17 +12,17 @@ namespace QueryTermWeightAnalyzer.Features
             return "IsPunct";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
             int idx = context.index;
             string strTerm = context.tknList[idx].strTerm;
 
             if (context.setPunct.Contains(strTerm) == true)
             {
-                return "1.0";
+                return 1;
             }
 
-            return "0.0";
+            return 0;
         }
     }
 }

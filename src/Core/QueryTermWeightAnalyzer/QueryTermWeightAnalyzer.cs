@@ -7,28 +7,11 @@ using AdvUtils;
 using WordSeg;
 using CRFSharp;
 using CRFSharpWrapper;
-//using LMDecoder;
 using QueryTermWeightAnalyzer.Features;
 using StochasticGradientBoost;
 
 namespace QueryTermWeightAnalyzer
 {
-    public class Token
-    {
-        public string strTerm;
-        public int rankId;
-        public float rankingscore;
-    }
-
-    public class RankXDist
-    {
-        public double pRank0;
-        public double pRank1;
-        public double pRank2;
-        public double pRank3;
-        public double pRank4;
-    }
-
     public class QueryTermWeightAnalyzer
     {
         //Key items in configuration file
@@ -47,17 +30,12 @@ namespace QueryTermWeightAnalyzer
 
         //word breaker
         WordSeg.WordSeg wordseg;
-        WordSeg.Tokens wbTokens;
+
 
         //Feature set for ranker
-
         //CRF model
-        public crf_out crf_out;
-        public SegDecoderTagger crf_tag;
-        public string[,] inbuf;
-
         CRFSharpWrapper.Decoder crf;
-        ModelFeatureGenerator featureGenerator;
+        CRFSharpFeatureGenerator featureGenerator;
 
         //Language models
         LMDecoder.KNDecoder lmDecoder;
@@ -247,6 +225,26 @@ namespace QueryTermWeightAnalyzer
             sr.Close();
         }
 
+        //Create worker instance for each thread
+        //If the analyzer runs in multip-thread environment, the work instance should be created in each thread separatedly
+        public Instance CreateInstance()
+        {
+            Instance instance = new Instance();
+
+            instance.crf_tag = crf.CreateTagger();
+            //Initialize word breaker's token instance
+            instance.wbTokens = wordseg.CreateTokens(1024);
+            instance.crf_out = new CRFSharpWrapper.crf_out();
+            instance.ftrList = new float[featureList.Count];
+
+            instance.context = new FeatureContext();
+            instance.context.term2rankDist = term2rankDist;
+            instance.context.setPunct = setPunct;
+            instance.context.lmDecoder = lmDecoder;
+
+            return instance;
+        }
+
         public bool Initialize(string strConfFileName)
         {
             //Load configuration file
@@ -277,16 +275,11 @@ namespace QueryTermWeightAnalyzer
             crf = new CRFSharpWrapper.Decoder();
             string strModelFileName = confDict[KEY_MODEL_FILE_NAME.ToLower()];
             crf.LoadModel(strModelFileName);
-            featureGenerator = new ModelFeatureGenerator();
-            crf_out = new CRFSharpWrapper.crf_out();
-            crf_tag = crf.CreateTagger();
-            inbuf = null;
+            featureGenerator = new CRFSharpFeatureGenerator();
 
-            wordseg = new WordSeg.WordSeg();
             //Load lexical dictionary
+            wordseg = new WordSeg.WordSeg();
             wordseg.LoadLexicalDict(confDict[KEY_LEXICAL_DICT_FILE_NAME.ToLower()], true);
-            //Initialize word breaker's token instance
-            wbTokens = wordseg.CreateTokens(1024);
 
             if (confDict.ContainsKey(KEY_RUN_RANKER_MODEL.ToLower()) == true)
             {
@@ -369,7 +362,6 @@ namespace QueryTermWeightAnalyzer
         //Extract string which is core or normal term
         private List<string> ExtractCoreToken(List<Token> tknList)
         {
-            StringBuilder sb = new StringBuilder();
             List<string> termList = new List<string>();
             foreach (Token tkn in tknList)
             {
@@ -432,15 +424,15 @@ namespace QueryTermWeightAnalyzer
 
         //Labeling tokens according its word formation by CRF model
         private static string strRankTagPrefix = "RANK_";
-        private List<Token> LabelString(List<string> termList)
+        private List<Token> LabelString(Instance instance, List<string> termList)
         {
             //Extract features from given text
             List<List<string>> sinbuf = featureGenerator.GenerateFeature(termList);
 
             //Call CRFSharp to predict word formation tags
-            int ret = crf.Segment(crf_out, crf_tag, sinbuf, 1, 0);
+            int ret = crf.Segment(instance.crf_out, instance.crf_tag, sinbuf, 1, 0);
             //Only use 1st-best result
-            crf_term_out item = crf_out.term_buf[0];
+            crf_term_out item = instance.crf_out.term_buf[0];
             if (ret < 0 || item.Count != termList.Count)
             {
                 //CRF parsing is failed
@@ -468,13 +460,13 @@ namespace QueryTermWeightAnalyzer
         }
 
         //Call word breaker to break given text
-        private List<string> WordBreak(string strText)
+        private List<string> WordBreak(Instance instance, string strText)
         {
             List<string> termList = new List<string>();
-            wordseg.Segment(strText, wbTokens, false);
-            for (int i = 0; i < wbTokens.tokenList.Count; i++)
+            wordseg.Segment(strText, instance.wbTokens, false);
+            for (int i = 0; i < instance.wbTokens.tokenList.Count; i++)
             {
-                string strTerm = NormalizeTerm((wbTokens.tokenList[i].strTerm));
+                string strTerm = NormalizeTerm(instance.wbTokens.tokenList[i].strTerm);
                 if (strTerm.Length == 0)
                 {
                     //Ignore empty string
@@ -537,9 +529,9 @@ namespace QueryTermWeightAnalyzer
         }
 
         //Call CRF decoder to predict term important level by word formation
-        public List<Token> AnalyzeWordFormationLevel(List<string> termList)
+        private List<Token> AnalyzeWordFormationLevel(Instance instance, List<string> termList)
         {
-            List<Token> tknList = LabelString(termList);
+            List<Token> tknList = LabelString(instance, termList);
             if (tknList == null)
             {
                 //CRF decoder parse is failed
@@ -556,7 +548,7 @@ namespace QueryTermWeightAnalyzer
             while (true)
             {
                 List<string> coreTknList = ExtractCoreToken(tknList);
-                List<Token> tmpTknList = LabelString(coreTknList);
+                List<Token> tmpTknList = LabelString(instance, coreTknList);
                 if (tmpTknList == null)
                 {
                     //CRF decoder parse is failed, abort current process
@@ -575,19 +567,17 @@ namespace QueryTermWeightAnalyzer
         }
 
         //Call CRF decoder to predict term important level by word formation
-        public List<Token> AnalyzeWordFormationLevel(string strText)
+        private List<Token> AnalyzeWordFormationLevel(Instance instance, string strText)
         {
-            List<string> termList = WordBreak(strText);
-            return AnalyzeWordFormationLevel(termList);
+            List<string> termList = WordBreak(instance, strText);
+            return AnalyzeWordFormationLevel(instance, termList);
         }
 
         //Analyze query term important level and score
-        public List<Token> Analyze(string strText)
+        public List<Token> Analyze(Instance instance, string strText)
         {
-            //Normalize query
-            strText = strText.ToLower().Trim();
             //Call CRF decoder to analyze important level by word formation
-            List<Token> tknList = AnalyzeWordFormationLevel(strText);
+            List<Token> tknList = AnalyzeWordFormationLevel(instance, strText);
             if (tknList == null)
             {
                 //Analyze term important level by word formation is failed.
@@ -601,38 +591,24 @@ namespace QueryTermWeightAnalyzer
             }
 
             //Initialize ranking feature context
-            FeatureContext context = InitializeFeatureContext(tknList);
+            instance.context.tknList = tknList;
             //Calcuate each term's important ranking score
             for (int i = 0; i < tknList.Count; i++)
             {
-                StringBuilder sb = new StringBuilder();
                 //Fill feature context
-                context.index = i;
+                instance.context.index = i;
 
                 //Extract features by current context
-                List<float> ftrList = new List<float>();
-                foreach (IFeature feature in featureList)
+                for (int j = 0; j < featureList.Count; j++)
                 {
-                    string strValue = feature.GetValue(context);
-                    ftrList.Add(float.Parse(strValue));
+                    instance.ftrList[j] = featureList[j].GetValue(instance.context);
                 }
 
                 //Predict term's ranking score
-                tknList[i].rankingscore = 1.0f - modelMSN.Evaluate(ftrList.ToArray());
+                tknList[i].rankingscore = 1.0f - modelMSN.Evaluate(instance.ftrList);
             }
 
             return tknList;
-        }
-
-        FeatureContext InitializeFeatureContext(List<Token> tknList)
-        {
-            FeatureContext context = new FeatureContext();
-            context.tknList = tknList;
-            context.term2rankDist = term2rankDist;
-            context.setPunct = setPunct;
-            context.lmDecoder = lmDecoder;
-
-            return context;
         }
 
         #region Feature Extractor
@@ -650,25 +626,25 @@ namespace QueryTermWeightAnalyzer
         }
         
         //Extract given terms feature set as string format
-        public List<string> ExtractFeature(List<string> termList)
+        public List<string> ExtractFeature(Instance instance, List<string> termList)
         {
-            List<Token> tknList = AnalyzeWordFormationLevel(termList);
+            List<Token> tknList = AnalyzeWordFormationLevel(instance, termList);
             if (tknList == null)
             {
                 //Analyze term weight by word formation is failed
                 return null;
             }
 
-            FeatureContext context = InitializeFeatureContext(tknList);
-
+            instance.context.tknList = tknList;
             List<string> rstList = new List<string>();
+            StringBuilder sb = new StringBuilder();
             for (int i = 0; i < tknList.Count; i++)
             {
-                StringBuilder sb = new StringBuilder();
-                context.index = i;
+                sb.Clear();
+                instance.context.index = i;
                 foreach (IFeature feature in featureList)
                 {
-                    string strValue = feature.GetValue(context);
+                    string strValue = feature.GetValue(instance.context).ToString();
                     sb.Append(strValue);
                     sb.Append("\t");
                 }

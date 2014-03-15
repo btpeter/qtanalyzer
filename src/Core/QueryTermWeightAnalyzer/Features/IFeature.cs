@@ -8,6 +8,6 @@ namespace QueryTermWeightAnalyzer.Features
     interface IFeature
     {
         string GetName();
-        string GetValue(FeatureContext context);
+        float GetValue(FeatureContext context);
     }
 }

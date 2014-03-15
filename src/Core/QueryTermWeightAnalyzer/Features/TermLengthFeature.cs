@@ -12,9 +12,9 @@ namespace QueryTermWeightAnalyzer.Features
             return "TermLength";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
-            return context.tknList[context.index].strTerm.Length.ToString();
+            return context.tknList[context.index].strTerm.Length;
         }
     }
 }

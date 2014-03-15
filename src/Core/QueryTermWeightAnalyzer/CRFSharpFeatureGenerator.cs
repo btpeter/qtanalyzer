@@ -6,7 +6,7 @@ using WordSeg;
 
 namespace QueryTermWeightAnalyzer
 {
-    class ModelFeatureGenerator : CRFSharp.IGenerateFeature
+    class CRFSharpFeatureGenerator : CRFSharp.IGenerateFeature
     {
         WordSeg.WordSeg wordseg;
         WordSeg.Tokens wbTokens;

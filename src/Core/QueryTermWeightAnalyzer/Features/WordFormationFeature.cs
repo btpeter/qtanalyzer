@@ -12,9 +12,9 @@ namespace QueryTermWeightAnalyzer.Features
             return "WordFormation";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
-            return context.tknList[context.index].rankId.ToString();
+            return context.tknList[context.index].rankId;
         }
     }
 }

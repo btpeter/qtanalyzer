@@ -58,6 +58,9 @@ namespace QueryTermWeightAnalyzerConsole
             }
             Console.WriteLine("Done.");
 
+            //Create working instance for each thread
+            Instance instance = analyzer.CreateInstance();
+
             while (true)
             {
                 string strLine = null;
@@ -71,7 +74,7 @@ namespace QueryTermWeightAnalyzerConsole
                 }
 
                 List<Token> tknList;
-                tknList = analyzer.Analyze(strLine);
+                tknList = analyzer.Analyze(instance, strLine);
                 if (tknList == null)
                 {
                     //Analyze term weight is failed.

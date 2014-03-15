@@ -12,13 +12,13 @@ namespace QueryTermWeightAnalyzer.Features
             return "IsEndTerm";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
             if (context.index + 1 == context.tknList.Count)
             {
-                return "1";
+                return 1;
             }
-            return "0";
+            return 0;
         }
     }
 }

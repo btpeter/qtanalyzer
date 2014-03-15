@@ -12,15 +12,15 @@ namespace QueryTermWeightAnalyzer.Features
             return "TermRank2Percent";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
             string strTerm = context.tknList[context.index].strTerm;
             if (context.term2rankDist.ContainsKey(strTerm) == true)
             {
-                return context.term2rankDist[strTerm].pRank2.ToString();
+                return (float)context.term2rankDist[strTerm].pRank2;
             }
 
-            return "0";
+            return 0;
         }
     }
 }

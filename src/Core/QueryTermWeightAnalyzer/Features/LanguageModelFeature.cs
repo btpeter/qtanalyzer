@@ -7,12 +7,12 @@ namespace QueryTermWeightAnalyzer.Features
 {
     class LanguageModelFeature : IFeature
     {
-        string IFeature.GetName()
+        public string GetName()
         {
             return "LanguageModel";
         }
 
-        string IFeature.GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
             //Generate raw text token list
             StringBuilder sb = new StringBuilder();
@@ -37,9 +37,9 @@ namespace QueryTermWeightAnalyzer.Features
 
             LMDecoder.LMResult lmResultNoTerm = context.lmDecoder.GetSentProb(sb.ToString().Trim(), 4);
 
-            double ratio = lmResultNoTerm.perplexity / lmResultRaw.perplexity;
+            float ratio = (float)(lmResultNoTerm.perplexity / lmResultRaw.perplexity);
 
-            return ratio.ToString();
+            return ratio;
         }
     }
 }

@@ -12,14 +12,14 @@ namespace QueryTermWeightAnalyzer.Features
             return "IsBeginTerm";
         }
 
-        public string GetValue(FeatureContext context)
+        public float GetValue(FeatureContext context)
         {
             if (context.index == 0)
             {
-                return "1";
+                return 1;
             }
 
-            return "0";
+            return 0;
         }
     }
 }

@@ -62,6 +62,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CRFSharpFeatureGenerator.cs" />
     <Compile Include="Features\FeatureContext.cs" />
     <Compile Include="Features\IFeature.cs" />
     <Compile Include="Features\IsBeginTermFeature.cs" />
@@ -76,9 +77,11 @@
     <Compile Include="Features\TermRank3PercentFeature.cs" />
     <Compile Include="Features\TermRank4PercentFeature.cs" />
     <Compile Include="Features\WordFormationFeature.cs" />
-    <Compile Include="ModelFeatureGenerator.cs" />
+    <Compile Include="Instance.cs" />
     <Compile Include="QueryTermWeightAnalyzer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RankXDist.cs" />
+    <Compile Include="Token.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="QueryTermWeightAnalyzer.ini" />

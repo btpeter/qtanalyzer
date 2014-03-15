@@ -38,6 +38,7 @@ namespace RankingFeatureExtractor
                 Console.WriteLine("Initialize the analyzer failed.");
                 return;
             }
+            Instance instance = analyzer.CreateInstance();
 
             StreamReader sr = new StreamReader(args[1]);
             StreamWriter sw_train = new StreamWriter(args[2] + ".train");
@@ -83,7 +84,7 @@ namespace RankingFeatureExtractor
                 }
 
                 //Extract each term's features
-                List<string> featureList = analyzer.ExtractFeature(termList);
+                List<string> featureList = analyzer.ExtractFeature(instance, termList);
                 if (featureList == null || featureList.Count != termList.Count)
                 {
                     //Failed to analyze term weight
