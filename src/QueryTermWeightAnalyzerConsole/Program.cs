@@ -49,7 +49,7 @@ namespace QueryTermWeightAnalyzerConsole
                 return;
             }
 
-            Console.WriteLine("Start to initialize query analyzr...");
+            Console.WriteLine("Start to initialize query term weight analyzer...");
             QueryTermWeightAnalyzer.QueryTermWeightAnalyzer analyzer = new QueryTermWeightAnalyzer.QueryTermWeightAnalyzer();
             if (analyzer.Initialize(args[0]) == false)
             {
@@ -71,6 +71,11 @@ namespace QueryTermWeightAnalyzerConsole
                 else
                 {
                     strLine = Console.ReadLine();
+                }
+
+                if (strLine == null || strLine.ToLower() == "quit")
+                {
+                    break;
                 }
 
                 List<Token> tknList;
