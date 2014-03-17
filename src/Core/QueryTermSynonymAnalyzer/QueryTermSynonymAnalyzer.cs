@@ -56,10 +56,10 @@ namespace QueryTermSynonymAnalyzer
                 string strTerm1 = items[0];
                 string strTerm2 = items[1];
                 double llr = float.Parse(items[2]);
-                if (llr < 1000.0)
-                {
-                    continue;
-                }
+                //if (llr < 1000.0)
+                //{
+                //    continue;
+                //}
 
                 SynContextSet synCtx = new SynContextSet();
                 synCtx.strTerm = strTerm2;
@@ -189,7 +189,7 @@ namespace QueryTermSynonymAnalyzer
             //Load lexical dictionary
             wordseg.LoadLexicalDict(strLexicalFileName, true);
             //Initialize word breaker's token instance
-            wbTokens = wordseg.CreateTokens(1024);
+            wbTokens = wordseg.CreateTokens();
         }
 
         private string WordSegment(string strText)

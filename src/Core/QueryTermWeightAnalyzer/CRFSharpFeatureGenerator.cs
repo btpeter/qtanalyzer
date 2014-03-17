@@ -49,7 +49,7 @@ namespace QueryTermWeightAnalyzer
             //Load lexical dictionary
             wordseg.LoadLexicalDict(strLexicalFileName, true);
             //Initialize word breaker's token instance
-            wbTokens = wordseg.CreateTokens(1024);
+            wbTokens = wordseg.CreateTokens();
 
             return true;
         }

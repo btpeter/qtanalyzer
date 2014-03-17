@@ -12,7 +12,7 @@ namespace QueryTermWeightAnalyzer
     {
         public WordSeg.Tokens wbTokens;
         public SegDecoderTagger crf_tag;
-        public crf_out crf_out;
+        public crf_seg_out []crf_seg_out;
         public float[] ftrList;
         public FeatureContext context;
     }

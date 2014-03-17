@@ -232,9 +232,12 @@ namespace QueryTermWeightAnalyzer
             Instance instance = new Instance();
 
             instance.crf_tag = crf.CreateTagger();
+            instance.crf_tag.set_nbest(1);
+            instance.crf_tag.set_vlevel(0);
             //Initialize word breaker's token instance
-            instance.wbTokens = wordseg.CreateTokens(1024);
-            instance.crf_out = new CRFSharpWrapper.crf_out();
+            instance.wbTokens = wordseg.CreateTokens();
+            instance.crf_seg_out = new crf_seg_out[1];
+            instance.crf_seg_out[0] = new crf_seg_out();
             instance.ftrList = new float[featureList.Count];
 
             instance.context = new FeatureContext();
@@ -430,9 +433,9 @@ namespace QueryTermWeightAnalyzer
             List<List<string>> sinbuf = featureGenerator.GenerateFeature(termList);
 
             //Call CRFSharp to predict word formation tags
-            int ret = crf.Segment(instance.crf_out, instance.crf_tag, sinbuf, 1, 0);
+            int ret = crf.Segment(instance.crf_seg_out, instance.crf_tag, sinbuf);
             //Only use 1st-best result
-            crf_term_out item = instance.crf_out.term_buf[0];
+            crf_seg_out item = instance.crf_seg_out[0];
             if (ret < 0 || item.Count != termList.Count)
             {
                 //CRF parsing is failed

@@ -132,7 +132,7 @@ namespace StatTermWeightInQuery
         {
             wordseg = new WordSeg.WordSeg();
             wordseg.LoadLexicalDict(strLexicalDictionary, true);
-            tokens = wordseg.CreateTokens(1024);
+            tokens = wordseg.CreateTokens();
         }
 
         //Load mapping file for term normalizing
@@ -210,7 +210,7 @@ namespace StatTermWeightInQuery
                         freq = int.Parse(strArray[2])
                     };
                 }
-                catch (SystemException err)
+                catch (Exception)
                 {
                     Console.WriteLine("Invalidated line: {0}", strLine);
                     continue;

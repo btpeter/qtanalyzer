@@ -69,11 +69,11 @@ namespace BuildQueryTermWeightCorpus
             return rstList;
         }
 
-        //Calculate topN maximum threshold list
+        //Calculate topN maximum threshold gap
         //scoreList : all weight score in a query, the scores in the list must be sorted from big to small
         //thresholdCnt : the number of thresholds
         //minGap : the minimum score gap between two adjacent scores
-        static List<double> CalcTopNMaxThreshold(List<ScoreItem> scoreList, int thresholdCnt, double minGap)
+        static List<double> CalcTopNMaxThresholdGap(List<ScoreItem> scoreList, int thresholdCnt, double minGap)
         {
             //Calculate all score gaps
             SortedList<double, List<ScoreItem>> gap2scoreList = new SortedList<double, List<ScoreItem>>();
@@ -90,12 +90,12 @@ namespace BuildQueryTermWeightCorpus
                 scoreList[i].gap = gap;
                 v = scoreList[i].score;
 
-                int iGap = (int)(gap * SCORE_FACTOR);
-                if (gap2cnt.ContainsKey(iGap) == false)
-                {
-                    gap2cnt.Add(iGap, 0);
-                }
-                gap2cnt[iGap]++;
+                //int iGap = (int)(gap * SCORE_FACTOR);
+                //if (gap2cnt.ContainsKey(iGap) == false)
+                //{
+                //    gap2cnt.Add(iGap, 0);
+                //}
+                //gap2cnt[iGap]++;
             }
 
             //Found the top-thresholdCnt max gaps and save thresholds
@@ -158,7 +158,7 @@ namespace BuildQueryTermWeightCorpus
             //Load lexical dictionary
             wordseg.LoadLexicalDict(args[3], true);
             //Initialize word breaker's token instance
-            wbTokens = wordseg.CreateTokens(1024);
+            wbTokens = wordseg.CreateTokens();
 
             if (File.Exists(args[4]) == false)
             {
@@ -235,22 +235,22 @@ namespace BuildQueryTermWeightCorpus
                         scoreList.Add(scoreItem);
                     }
 
-                    //Find topN max threshold value
-                    List<double> thresholdList = null;
-                    thresholdList = CalcTopNMaxThreshold(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
-                    if (thresholdList.Count != MAX_THRESHOLD_NUM)
+                    //Find topN max threshold gaps
+                    List<double> thresholdGapList = CalcTopNMaxThresholdGap(scoreList, MAX_THRESHOLD_NUM, MIN_WEIGHT_SCORE_GAP);
+                    if (thresholdGapList.Count != MAX_THRESHOLD_NUM)
                     {
+                        //If the number of threshold gap is different with the specified number in command line, ignore this query
                         continue;
                     }
 
-                    if (thresholdList.Count > 0)
+                    if (thresholdGapList.Count > 0)
                     {
                         int coreCnt = 0;
                         int otherCnt = 0;
                         //Count the number of core terms
                         foreach (KeyValuePair<double, int> pair in sdict)
                         {
-                            if (pair.Key > thresholdList[0])
+                            if (pair.Key > thresholdGapList[0])
                             {
                                 coreCnt += pair.Value;
                             }
@@ -292,9 +292,9 @@ namespace BuildQueryTermWeightCorpus
 
                         bool bProcessed = false;
                         //Label tags according term's weight and thresholds
-                        for (int j = 0; j < thresholdList.Count; j++)
+                        for (int j = 0; j < thresholdGapList.Count; j++)
                         {
-                            if (fWeight > thresholdList[j])
+                            if (fWeight > thresholdGapList[j])
                             {
                                 tk.strTag = labItems[j];
                                 bProcessed = true;
@@ -305,7 +305,7 @@ namespace BuildQueryTermWeightCorpus
                         //Label the last part
                         if (bProcessed == false)
                         {
-                            int j = thresholdList.Count;
+                            int j = thresholdGapList.Count;
                             tk.strTag = labItems[j];
                         }
 
@@ -326,7 +326,7 @@ namespace BuildQueryTermWeightCorpus
                     }
                     sw.WriteLine("{0}\t{1}\t{2}", strRawQuery, queryFreq, strOutput.Trim());
                 }
-                catch (Exception err)
+                catch (Exception)
                 {
                     Console.WriteLine("Invalidated sentence: {0}", strLine);
                 }

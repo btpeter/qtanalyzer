@@ -159,7 +159,7 @@ namespace GenerateTermSynPattern
             wordseg.LoadLexicalDict(args[0], true);
             //Create tokens which is local-thread structure
             //The max word segment legnth is MAX_SEGMENT_LENGTH
-            tokens = wordseg.CreateTokens(4096);
+            tokens = wordseg.CreateTokens();
 
 
             StreamReader sr = new StreamReader(args[1]);
@@ -311,7 +311,7 @@ namespace GenerateTermSynPattern
 
 
                         if (N == 0 ||
-                            a ==  0 ||
+                            a == 0 ||
                             b == 0 ||
                             c == 0 ||
                             d == 0 ||
@@ -384,14 +384,13 @@ namespace GenerateTermSynPattern
                     {
                         sw.WriteLine(item);
                     }
-                    catch (Exception err) { }
+                    catch (Exception)
+                    {
+                        Console.WriteLine("Invalidated line: {0}", item);
+                    }
                 }
             }
-            try
-            {
-                sw.Close();
-            }
-            catch (Exception err) { }
+            sw.Close();
         }
     }
 }

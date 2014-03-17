@@ -22,7 +22,17 @@ namespace MergeTrainCorpus
             //Merge multi-train corpus into one corpus.
             //If many train corpus contain the same query with different label result, the first one will be saved,
             //and others will be dropped.
-            bool bWeight = bool.Parse(args[0]);
+            bool bWeight = false;
+            try
+            {
+                bWeight = bool.Parse(args[0]);
+            }
+            catch (Exception err)
+            {
+                Console.WriteLine("FAILED: Invalidated option for weight");
+                return;
+            }
+
             StreamWriter sw = new StreamWriter(args[1]);
             for (int i = 2; i < args.Length; i++)
             {

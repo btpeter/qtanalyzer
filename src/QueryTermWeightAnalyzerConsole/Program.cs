@@ -49,7 +49,7 @@ namespace QueryTermWeightAnalyzerConsole
                 return;
             }
 
-            Console.WriteLine("Start to initialize query analyzr...");
+            Console.WriteLine("Start to initialize query term weight analyzer...");
             QueryTermWeightAnalyzer.QueryTermWeightAnalyzer analyzer = new QueryTermWeightAnalyzer.QueryTermWeightAnalyzer();
             if (analyzer.Initialize(args[0]) == false)
             {
@@ -73,12 +73,19 @@ namespace QueryTermWeightAnalyzerConsole
                     strLine = Console.ReadLine();
                 }
 
+                if (strLine == null || strLine.ToLower() == "quit")
+                {
+                    break;
+                }
+
                 List<Token> tknList;
-                tknList = analyzer.Analyze(instance, strLine);
+                string[] columns = strLine.Split('\t');
+
+                tknList = analyzer.Analyze(instance, columns[0]);
                 if (tknList == null)
                 {
                     //Analyze term weight is failed.
-                    Console.WriteLine("Failed to analyze {0}", strLine);
+                    Console.WriteLine("Failed to analyze {0}", columns[0]);
                     continue;
                 }
 
