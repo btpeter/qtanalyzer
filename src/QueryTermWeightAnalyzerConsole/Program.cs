@@ -40,8 +40,8 @@ namespace QueryTermWeightAnalyzerConsole
                     Console.WriteLine("Input file {0} is not existed.", args[1]);
                     return;
                 }
-                sr = new StreamReader(args[1]);
-                sw = new StreamWriter(args[2]);
+                sr = new StreamReader(args[1], Encoding.UTF8);
+                sw = new StreamWriter(args[2], false, Encoding.UTF8);
             }
             else if (args.Length != 1)
             {
